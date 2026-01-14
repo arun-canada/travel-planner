@@ -41,7 +41,6 @@
         <a href="#home" class="nav-link" data-page="home">🏠 Home</a>
         <a href="#explore" class="nav-link" data-page="explore">🔍 Explore</a>
         <a href="#chat" class="nav-link" data-page="chat">🤖 AI Assistant</a>
-        <a href="#planner" class="nav-link" data-page="planner">📝 Plan Trip</a>
         <a href="#profile" class="nav-link" data-page="profile">👤 Profile</a>
       </nav>
 
@@ -112,7 +111,13 @@
         <div class="container">
           <h1 class="mb-lg">Explore Destinations</h1>
 
-          <!-- Search Bar -->
+          <!-- Search Bar with Autocomplete -->
+          <div class="autocomplete-container mb-md">
+            <input type="text" id="countrySearch" class="form-input search-with-autocomplete"
+              placeholder="Search countries or cities..." autocomplete="off">
+            <div id="searchAutocomplete" class="autocomplete-dropdown hidden"></div>
+          </div>
+
           <!-- Filter Panel -->
           <div class="filter-panel mb-lg" id="filterPanel">
             <button class="btn btn-sm btn-outline" id="toggleFilters">🔧 Filters</button>
@@ -206,11 +211,14 @@
       </section>
     </div>
 
-    <!-- TRIP PLANNER WIZARD PAGE -->
-    <div id="plannerPage" class="page-container hidden">
-      <section class="section">
+    <!-- INLINE TRIP PLANNER OVERLAY -->
+    <div id="inlinePlannerOverlay" class="inline-planner-overlay hidden">
+      <div class="inline-planner-content">
         <div class="container">
-          <h1 class="mb-lg">📝 Smart Trip Planner</h1>
+          <div class="wizard-header">
+            <h1 class="wizard-title">📝 Smart Trip Planner</h1>
+            <button class="wizard-close" id="closePlanner" title="Close wizard">✕</button>
+          </div>
           <div class="wizard-container">
             <div class="wizard-steps" id="wizardSteps"></div>
             <div id="wizardContent" class="wizard-content"></div>
@@ -220,7 +228,7 @@
             </div>
           </div>
         </div>
-      </section>
+      </div>
     </div>
 
   </main>

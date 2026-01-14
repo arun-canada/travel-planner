@@ -1,4 +1,4 @@
-// TripFlow - Travel Planning PWA
+﻿// TripFlow - Travel Planning PWA
 // Complete Application Logic
 
 // ========== STATE MANAGEMENT ==========
@@ -694,8 +694,24 @@ function processChatbotResponse(userMessage) {
   const lower = userMessage.toLowerCase();
   const ctx = state.chatbotContext;
 
+  // Extract numeric budget first (e.g., "5000", "$5000", "5,000")
+  const budgetMatch = userMessage.match(/\$?\s*(\d+(?:,\d{3})*(?:\.\d{2})?)/);
+  if (budgetMatch && !ctx.budget) {
+    const amount = parseFloat(budgetMatch[1].replace(/,/g, ''));
+    // Only treat as budget if it's a reasonable trip budget (>= 500)
+    if (amount >= 500) {
+      if (amount < 2000) {
+        ctx.budget = 'budget';
+      } else if (amount <= 6000) {
+        ctx.budget = 'mid';
+      } else {
+        ctx.budget = 'luxury';
+      }
+    }
+  }
+
   // Extract information from message
-  if (lower.includes('budget') || lower.includes('cheap') || lower.includes('expensive') || lower.includes('luxury')) {
+  if (!ctx.budget && (lower.includes('budget') || lower.includes('cheap') || lower.includes('expensive') || lower.includes('luxury'))) {
     if (lower.includes('budget') || lower.includes('cheap') || lower.includes('affordable')) {
       ctx.budget = 'budget';
     } else if (lower.includes('luxury') || lower.includes('expensive') || lower.includes('high-end')) {
@@ -1286,7 +1302,7 @@ function wizardNext() {
 
   if (wizardStep === 7) {
     // Create the trip
-    savePlannedTrip();
+    savePlannedTripWithItinerary();
     return;
   }
 
@@ -2176,3 +2192,413 @@ function submitEditDestination(tripId, index) {
   closeModal();
 }
 
+ 
+
+
+// ========== AUTOCOMPLETE SYSTEM ==========
+let autocompleteSelectedIndex = -1;
+let autocompleteMatches = [];
+
+function performAutocompleteSearch(query, inputId, dropdownId) {
+  if (!query || query.length < 2) {
+    hideAutocomplete(dropdownId);
+    return;
+  }
+
+  const lower = query.toLowerCase();
+  const results = [];
+
+  // Search cities from DESTINATION_DATABASE
+  DESTINATION_DATABASE.forEach(dest => {
+    const nameMatch = dest.name.toLowerCase().includes(lower);
+    const countryMatch = dest.country.toLowerCase().includes(lower);
+    
+    if (nameMatch || countryMatch) {
+      results.push({
+        type: 'city',
+        icon: '???',
+        name: dest.name,
+        country: dest.country,
+        meta: `${dest.country} � City`,
+        budget: dest.budget,
+        data: dest
+      });
+    }
+  });
+
+  autocompleteMatches = results.slice(0, 8);
+  renderAutocomplete(autocompleteMatches, dropdownId, inputId);
+}
+
+function renderAutocomplete(results, dropdownId, inputId) {
+  const dropdown = document.getElementById(dropdownId);
+  
+  if (!dropdown) return;
+  
+  if (results.length === 0) {
+    dropdown.innerHTML = '<div class="autocomplete-empty">No destinations found</div>';
+    dropdown.classList.remove('hidden');
+    return;
+  }
+
+  dropdown.innerHTML = results.map((r, i) => `
+    <div class="autocomplete-item ${i === autocompleteSelectedIndex ? 'selected' : ''}" 
+         data-index="${i}">
+      <div class="autocomplete-icon">${r.icon}</div>
+      <div class="autocomplete-details">
+        <div class="autocomplete-name">${r.name}</div>
+        <div class="autocomplete-meta">${r.meta}</div>
+      </div>
+      <div class="autocomplete-badge">${r.budget}</div>
+    </div>
+  `).join('');
+  
+  dropdown.classList.remove('hidden');
+  
+  // Add click handlers
+  dropdown.querySelectorAll('.autocomplete-item').forEach((item, idx) => {
+    item.addEventListener('click', () => selectAutocompleteItem(idx, inputId, dropdownId));
+  });
+}
+
+function selectAutocompleteItem(index, inputId, dropdownId) {
+  if (index < 0 || index >= autocompleteMatches.length) return;
+  
+  const selected = autocompleteMatches[index];
+  const input = document.getElementById(inputId);
+  
+  const displayText = selected.type === 'city' 
+    ? `${selected.name}, ${selected.country}` 
+    : selected.name;
+  
+  input.value = displayText;
+  hideAutocomplete(dropdownId);
+  
+  // Trigger city search
+  if (inputId === 'countrySearch') {
+    searchDestinations(selected.name);
+  }
+}
+
+function hideAutocomplete(dropdownId) {
+  const dropdown = document.getElementById(dropdownId);
+  if (dropdown) {
+    dropdown.classList.add('hidden');
+  }
+  autocompleteSelectedIndex = -1;
+  autocompleteMatches = [];
+}
+
+function handleAutocompleteKeyboard(e, inputId, dropdownId) {
+  const dropdown = document.getElementById(dropdownId);
+  
+  if (!dropdown || dropdown.classList.contains('hidden')) {
+    return;
+  }
+
+  switch(e.key) {
+    case 'ArrowDown':
+      e.preventDefault();
+      autocompleteSelectedIndex = Math.min(autocompleteSelectedIndex + 1, autocompleteMatches.length - 1);
+      renderAutocomplete(autocompleteMatches, dropdownId, inputId);
+      break;
+      
+    case 'ArrowUp':
+      e.preventDefault();
+      autocompleteSelectedIndex = Math.max(autocompleteSelectedIndex - 1, -1);
+      renderAutocomplete(autocompleteMatches, dropdownId, inputId);
+      break;
+      
+    case 'Enter':
+      e.preventDefault();
+      if (autocompleteSelectedIndex >= 0) {
+        selectAutocompleteItem(autocompleteSelectedIndex, inputId, dropdownId);
+      }
+      break;
+      
+    case 'Escape':
+      hideAutocomplete(dropdownId);
+      break;
+  }
+}
+
+// Initialize autocomplete when DOM is ready
+(function initAutocomplete() {
+  const searchInput = document.getElementById('countrySearch');
+  if (!searchInput) {
+    // Retry after DOM is fully loaded
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initAutocomplete);
+    }
+    return;
+  }
+  
+  let searchTimeout;
+  
+  searchInput.addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      performAutocompleteSearch(e.target.value, 'countrySearch', 'searchAutocomplete');
+    }, 200);
+  });
+  
+  searchInput.addEventListener('keydown', (e) => {
+    handleAutocompleteKeyboard(e, 'countrySearch', 'searchAutocomplete');
+  });
+  
+  // Hide autocomplete when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.autocomplete-container')) {
+      hideAutocomplete('searchAutocomplete');
+    }
+  });
+})();
+// ==============================================
+// INLINE TRIP PLANNER INTEGRATION
+// ==============================================
+
+// Launch the inline trip planner wizard
+function launchInlinePlanner() {
+    const overlay = document.getElementById('inlinePlannerOverlay');
+    if (!overlay) {
+        console.error('Inline planner overlay not found');
+        return;
+    }
+
+    // Reset wizard state for new trip creation
+    wizardStep = 0;
+    state.tripPlannerState = {
+        destination: '',
+        startDate: '',
+        endDate: '',
+        travelers: 1,
+        totalBudget: 0,
+        pace: '',
+        foodStyle: '',
+        accommodation: '',
+        interests: [],
+        selectedHotel: null,
+        selectedActivities: [],
+        healthData: null
+    };
+
+    // Show overlay
+    overlay.classList.remove('hidden');
+
+    // Initialize wizard
+    renderWizardSteps();
+    renderWizardStep();
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+}
+
+// Close the inline trip planner wizard
+function closeInlinePlanner() {
+    const overlay = document.getElementById('inlinePlannerOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+
+    // Restore body scroll
+    document.body.style.overflow = '';
+
+    // Reset wizard state
+    wizardStep = 0;
+}
+
+// Updated savePlannedTrip function to persist itinerary
+function savePlannedTripWithItinerary() {
+    const ps = state.tripPlannerState;
+
+    if (!ps.destination || !ps.startDate || !ps.endDate) {
+        showToast('âš ï¸ Please complete all required fields');
+        return;
+    }
+
+    // Generate full itinerary
+    const itinerary = generateCompleteItinerary(ps);
+
+    // Create new trip with itinerary data
+    const trip = {
+        id: generateId(),
+        name: ps.destination,
+        description: `${ps.pace || 'Custom'} pace trip to ${ps.destination}`,
+        startDate: ps.startDate,
+        endDate: ps.endDate,
+        destinations: [ps.destination],
+        expenses: [],
+        packingList: [],
+        documents: [],
+        // NEW: Itinerary data
+        itinerary: {
+            days: itinerary.days,
+            budget: {
+                total: ps.totalBudget,
+                lodging: Math.round(ps.totalBudget * 0.4),
+                activities: Math.round(ps.totalBudget * 0.25),
+                food: Math.round(ps.totalBudget * 0.25),
+                transport: Math.round(ps.totalBudget * 0.1)
+            },
+            hotelDetails: ps.selectedHotel,
+            preferences: {
+                pace: ps.pace,
+                foodStyle: ps.foodStyle,
+                accommodation: ps.accommodation,
+                interests: ps.interests
+            },
+            healthPreferences: ps.healthData
+        }
+    };
+
+    state.trips.push(trip);
+    saveState();
+
+    // Close inline planner
+    closeInlinePlanner();
+
+    // Navigate to trip detail
+    navigateTo('itinerary', trip.id);
+
+    // Show success message
+    showToast('ðŸŽ‰ Trip created with full itinerary!');
+    addXP(100);
+}
+
+// Generate complete day-by-day itinerary
+function generateCompleteItinerary(plannerState) {
+    const { destination, startDate, endDate, interests, pace } = plannerState;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const dayCount = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+    const days = [];
+
+    // Get destination-specific activities
+    const destData = DESTINATION_DATABASE.find(d =>
+        d.name.toLowerCase().includes(destination.toLowerCase()) ||
+        destination.toLowerCase().includes(d.name.toLowerCase())
+    );
+
+    for (let i = 0; i < dayCount; i++) {
+        const currentDate = new Date(start);
+        currentDate.setDate(start.getDate() + i);
+
+        const activities = generateDayActivities(i + 1, interests, pace, destData);
+
+        days.push({
+            dayNumber: i + 1,
+            date: currentDate.toISOString().split('T')[0],
+            activities: activities,
+            notes: ''
+        });
+    }
+
+    return { days };
+}
+
+// Generate activities for a specific day
+function generateDayActivities(dayNum, interests, pace, destData) {
+    const activities = [];
+    const activityCount = pace === 'Relaxed' ? 2 : pace === 'Packed' ? 5 : 3;
+
+    const timeSlots = ['Morning', 'Afternoon', 'Evening'];
+    const defaultActivities = {
+        'Morning': ['Breakfast at local cafÃ©', 'Museum visit', 'Walking tour'],
+        'Afternoon': ['Lunch', 'Sightseeing', 'Shopping'],
+        'Evening': ['Dinner', 'Sunset viewing', 'Local entertainment']
+    };
+
+    // Use destination-specific activities if available
+    const destActivities = destData?.activities || [];
+
+    for (let i = 0; i < Math.min(activityCount, timeSlots.length); i++) {
+        const slot = timeSlots[i];
+        let activityName;
+
+        if (destActivities.length > 0 && dayNum <= destActivities.length) {
+            activityName = destActivities[(dayNum - 1 + i) % destActivities.length];
+        } else {
+            activityName = defaultActivities[slot][i % defaultActivities[slot].length];
+        }
+
+        activities.push({
+            time: slot,
+            name: activityName,
+            duration: '2-3 hours',
+            type: interests[i % interests.length] || 'Sightseeing'
+        });
+    }
+
+    return activities;
+}
+
+// Initialize inline planner event listeners
+function initInlinePlannerListeners() {
+    const closeBtn = document.getElementById('closePlanner');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeInlinePlanner);
+    }
+
+    // Close on overlay click (click outside modal)
+    const overlay = document.getElementById('inlinePlannerOverlay');
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                closeInlinePlanner();
+            }
+        });
+    }
+}
+
+console.log('âœ… Inline Trip Planner functions loaded');
+// Enhanced initInlinePlannerListeners with event listener wiring
+function initInlinePlannerListeners() {
+    const closeBtn = document.getElementById('closePlanner');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeInlinePlanner);
+    }
+
+    // Close on overlay click (click outside modal)
+    const overlay = document.getElementById('inlinePlannerOverlay');
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                closeInlinePlanner();
+            }
+        });
+    }
+
+    // Wire up wizard navigation buttons
+    const nextBtn = document.getElementById('wizardNext');
+    const prevBtn = document.getElementById('wizardPrev');
+
+    if (nextBtn && typeof wizardNext === 'function') {
+        nextBtn.onclick = () => wizardNext();
+    }
+
+    if (prevBtn && typeof wizardPrev === 'function') {
+        prevBtn.onclick = () => wizardPrev();
+    }
+
+    // Wire up create trip buttons to launch inline planner
+    const createBtn1 = document.getElementById('createTripBtn');
+    const createBtn2 = document.getElementById('createTripBtn2');
+
+    if (createBtn1) {
+        createBtn1.addEventListener('click', (e) => {
+            e.preventDefault();
+            launchInlinePlanner();
+        });
+    }
+
+    if (createBtn2) {
+        createBtn2.addEventListener('click', (e) => {
+            e.preventDefault();
+            launchInlinePlanner();
+        });
+    }
+}
+
+// Replace the old init function
+console.log('âœ… Enhanced initInlinePlannerListeners with full event wiring');
