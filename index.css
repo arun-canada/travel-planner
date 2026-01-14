@@ -2851,3 +2851,64 @@ a:hover {
 .available-activity:hover .text-muted {
   color: rgba(255, 255, 255, 0.8);
 }
+
+/* ========== ACTIVITY REORDER & CUSTOM FORM ========== */
+.activity-order-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: var(--spacing-sm);
+}
+
+.btn-xs {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  line-height: 1;
+  min-width: 24px;
+}
+
+.btn-xs.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.custom-activity-form {
+  background: #f8f9fa;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+}
+
+.form-row {
+  margin-bottom: var(--spacing-sm);
+}
+
+.form-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--spacing-sm);
+}
+
+.form-row-grid label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.my-lg {
+  margin-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #eee;
+}
+
+.edit-activity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: #f8f9fa;
+  border-radius: var(--radius-md);
+  border: 1px solid #eee;
+}

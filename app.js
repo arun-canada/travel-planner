@@ -3615,10 +3615,20 @@ window.editDayActivities = function (tripId, dayIndex) {
   const activityPool = mode === 'Protect' ? ACTIVITY_POOL.relaxed :
     mode === 'Go Big' ? ACTIVITY_POOL.intense : ACTIVITY_POOL.balanced;
 
+  const actCount = day.activities.length;
+
   const activitiesHTML = day.activities.map((act, i) => `
     <div class="edit-activity-row" data-index="${i}">
+      <div class="activity-order-btns">
+        <button class="btn btn-xs btn-outline ${i === 0 ? 'disabled' : ''}" 
+                onclick="moveActivityUp('${tripId}', ${dayIndex}, ${i})" 
+                ${i === 0 ? 'disabled' : ''} title="Move up">▲</button>
+        <button class="btn btn-xs btn-outline ${i === actCount - 1 ? 'disabled' : ''}" 
+                onclick="moveActivityDown('${tripId}', ${dayIndex}, ${i})" 
+                ${i === actCount - 1 ? 'disabled' : ''} title="Move down">▼</button>
+      </div>
       <span class="activity-name">${act.title}</span>
-      <span class="activity-meta">${act.duration}min • ${act.steps} steps</span>
+      <span class="activity-meta">${act.duration}min • ${act.steps || 0} steps</span>
       <button class="btn btn-sm btn-danger" onclick="removeActivityFromDay('${tripId}', ${dayIndex}, ${i})">✕</button>
     </div>
   `).join('');
@@ -3633,11 +3643,44 @@ window.editDayActivities = function (tripId, dayIndex) {
   showModal(`Edit Day ${day.day} - ${day.weekday}`, `
     <div class="edit-day-container">
       <h4 class="mb-md">Current Activities</h4>
+      <p class="text-muted text-sm mb-sm">Use ▲▼ arrows to reorder</p>
       <div class="current-activities-list">
         ${activitiesHTML || '<p class="text-muted">No activities</p>'}
       </div>
       
-      <h4 class="mb-md mt-lg">Add Activities (${mode} mode)</h4>
+      <hr class="my-lg">
+      
+      <h4 class="mb-md">Add Custom Activity</h4>
+      <div class="custom-activity-form">
+        <div class="form-row">
+          <input type="text" id="customActivityTitle" class="form-input" placeholder="Activity name (e.g., Lunch at Cafe)" />
+        </div>
+        <div class="form-row-grid">
+          <div>
+            <label class="text-xs text-muted">Duration (min)</label>
+            <input type="number" id="customActivityDuration" class="form-input" value="60" min="15" max="480" />
+          </div>
+          <div>
+            <label class="text-xs text-muted">Est. Steps</label>
+            <input type="number" id="customActivitySteps" class="form-input" value="500" min="0" max="20000" />
+          </div>
+          <div>
+            <label class="text-xs text-muted">Type</label>
+            <select id="customActivityType" class="form-input">
+              <option value="sedentary">Sedentary (rest/food)</option>
+              <option value="walking">Walking</option>
+              <option value="active">Active</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm mt-sm" onclick="addCustomActivity('${tripId}', ${dayIndex})">
+          + Add Custom Activity
+        </button>
+      </div>
+      
+      <hr class="my-lg">
+      
+      <h4 class="mb-md">Quick Add (${mode} mode)</h4>
       <div class="available-activities-list">
         ${availableHTML}
       </div>
@@ -3661,6 +3704,74 @@ window.removeActivityFromDay = function (tripId, dayIndex, actIndex) {
   saveData();
   editDayActivities(tripId, dayIndex); // Refresh modal
   showToast('Activity removed', 'info');
+};
+
+// Move activity up in the order
+window.moveActivityUp = function (tripId, dayIndex, actIndex) {
+  const trip = state.trips.find(t => t.id === tripId);
+  if (!trip || !trip.itinerary || !trip.itinerary[dayIndex]) return;
+  if (actIndex <= 0) return; // Already at top
+
+  const activities = trip.itinerary[dayIndex].activities;
+  // Swap with previous activity
+  [activities[actIndex - 1], activities[actIndex]] = [activities[actIndex], activities[actIndex - 1]];
+
+  saveData();
+  editDayActivities(tripId, dayIndex); // Refresh modal
+};
+
+// Move activity down in the order
+window.moveActivityDown = function (tripId, dayIndex, actIndex) {
+  const trip = state.trips.find(t => t.id === tripId);
+  if (!trip || !trip.itinerary || !trip.itinerary[dayIndex]) return;
+
+  const activities = trip.itinerary[dayIndex].activities;
+  if (actIndex >= activities.length - 1) return; // Already at bottom
+
+  // Swap with next activity
+  [activities[actIndex], activities[actIndex + 1]] = [activities[actIndex + 1], activities[actIndex]];
+
+  saveData();
+  editDayActivities(tripId, dayIndex); // Refresh modal
+};
+
+// Add a custom activity
+window.addCustomActivity = function (tripId, dayIndex) {
+  const trip = state.trips.find(t => t.id === tripId);
+  if (!trip || !trip.itinerary || !trip.itinerary[dayIndex]) return;
+
+  const title = document.getElementById('customActivityTitle').value.trim();
+  const duration = parseInt(document.getElementById('customActivityDuration').value) || 60;
+  const steps = parseInt(document.getElementById('customActivitySteps').value) || 0;
+  const type = document.getElementById('customActivityType').value || 'sedentary';
+
+  if (!title) {
+    showToast('Please enter an activity name', 'error');
+    return;
+  }
+
+  const newActivity = {
+    id: `custom-${Date.now()}`,
+    title: title,
+    type: type,
+    duration: duration,
+    steps: steps,
+    cals: type === 'active' ? Math.round(steps * 0.05) : (type === 'walking' ? Math.round(steps * 0.03) : 0),
+    temp: 22,
+    transit: 0,
+    isCustom: true
+  };
+
+  trip.itinerary[dayIndex].activities.push(newActivity);
+
+  // Recalculate day stats
+  const day = trip.itinerary[dayIndex];
+  day.healthStats.steps = day.activities.reduce((acc, act) => acc + (act.steps || 0), 0);
+  day.healthStats.calories = day.activities.reduce((acc, act) => acc + (act.cals || 0), 0);
+
+  saveData();
+  editDayActivities(tripId, dayIndex); // Refresh modal
+  showToast(`"${title}" added!`, 'success');
 };
 
 window.addActivityToDay = function (tripId, dayIndex, poolIndex) {
