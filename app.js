@@ -3,27 +3,19 @@
 
 // ========== STATE MANAGEMENT ==========
 const state = {
-  currentPage: 'home',
-  currentTripId: null,
-  currentTab: 'overview',
-  trips: [],
-  chatHistory: [],
-  chatbotContext: {},
-  tripPlannerState: {},
+  trips: [], // { id, name, destinations: [], startDate, endDate, budget, notes, packingList: [], expenses: [], documents: [] }
+  activeTripId: null,
+  currentView: 'home', // home, trip-detail, explore
   activeFilters: { budget: 'all', season: 'all', vibes: [] },
-  profile: {
-    xp: 0,
-    level: 1,
-    achievements: [],
-    stats: {
-      totalTrips: 0,
-      totalDestinations: 0,
-      countriesVisited: 0,
-      totalExpenses: 0,
-      packingListsCompleted: 0,
-      documentsUploaded: 0
-    }
-  }
+  planningMode: false, // NEW: Track if user is in "Explore to Plan" flow
+  tempDestinations: [], // NEW: Buffer for selected destinations in Explore flow
+  achievements: [
+    { id: 'first_trip', icon: '🌍', title: 'First Steps', desc: 'Create your first trip' },
+    { id: 'budget_master', icon: '💰', title: 'Budget Master', desc: 'Plan a trip under budget' },
+    { id: 'globetrotter', icon: '✈️', title: 'Globetrotter', desc: 'Visit 3 different countries' }
+  ],
+  userLevel: 1,
+  xp: 0
 };
 
 // ========== ACHIEVEMENTS DEFINITION ==========
@@ -536,23 +528,47 @@ function initializeMap(trip) {
     `Showing ${mapped} of ${total} destinations on map`;
 }
 
-// ========== REST COUNTRIES API ==========
+// ========== EXPLORE SEARCH =========
 async function searchCountries(query) {
+  const grid = document.getElementById('countryGrid');
   if (!query) {
-    document.getElementById('countryGrid').innerHTML =
-      '<div class="empty-state"><div class="empty-icon">🌍</div><p class="empty-message">Search for countries to explore destinations</p></div>';
+    renderDestinationCards(DESTINATION_DATABASE);
     return;
   }
 
+  const lowerQuery = query.toLowerCase();
+
+  // 1. Search Local Database FIRST (Cities/Destinations)
+  const localMatches = DESTINATION_DATABASE.filter(dest =>
+    dest.name.toLowerCase().includes(lowerQuery) ||
+    dest.country.toLowerCase().includes(lowerQuery) ||
+    dest.desc.toLowerCase().includes(lowerQuery)
+  );
+
+  // 2. Render local matches immediately
+  if (localMatches.length > 0) {
+    renderDestinationCards(localMatches);
+    // Optional: Could still fetch API to append, but for now local is better quality
+    return;
+  }
+
+  // 3. Fallback to API if no local matches found
   try {
     const response = await fetch(`https://restcountries.com/v3.1/name/${encodeURIComponent(query)}`);
     if (!response.ok) throw new Error('Not found');
 
     const countries = await response.json();
-    renderCountryCards(countries.slice(0, 12));
+    // Use the API results but format appropriately? 
+    // The previous renderCountryCards was specific to API structure.
+    renderCountryCards(countries); // Show all results, no slice limit
   } catch (e) {
-    document.getElementById('countryGrid').innerHTML =
-      '<div class="empty-state"><div class="empty-icon">😕</div><p class="empty-message">No countries found</p></div>';
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">😕</div>
+        <p class="empty-message">No destinations found for "${sanitizeHTML(query)}"</p>
+        <button class="btn btn-sm btn-outline mt-sm" onclick="renderDestinationCards(DESTINATION_DATABASE)">Show All</button>
+      </div>
+    `;
   }
 }
 
@@ -587,28 +603,52 @@ function renderCountryCards(countries) {
 }
 
 function addCountryToTrip(countryName) {
-  if (state.trips.length === 0) {
-    showToast('Create a trip first!', 'warning');
-    return;
+  // If no trips, handle gracefully
+  let tripOptions = '';
+  if (state.trips.length > 0) {
+    tripOptions = state.trips.map(t =>
+      `<option value="${t.id}">${sanitizeHTML(t.name)}</option>`
+    ).join('');
+  } else {
+    tripOptions = '<option value="" disabled selected>No trips created yet</option>';
   }
 
-  const tripOptions = state.trips.map(t =>
-    `<option value="${t.id}">${sanitizeHTML(t.name)}</option>`
-  ).join('');
+  const createTripHtml = `
+    <div class="text-center mt-sm">
+      <span class="text-muted text-sm">Or</span>
+      <button class="btn btn-sm btn-outline btn-block mt-xs" onclick="closeModal(); launchInlinePlanner()">
+        ➕ Create New Trip
+      </button>
+    </div>
+  `;
 
   showModal('Add to Trip', `
     <div class="form-group">
       <label class="form-label">Select Trip</label>
-      <select id="tripSelect" class="form-select">${tripOptions}</select>
+      <select id="tripSelect" class="form-select" ${state.trips.length === 0 ? 'disabled' : ''}>${tripOptions}</select>
     </div>
+    ${createTripHtml}
     <div class="form-group">
       <label class="form-label">Notes (optional)</label>
       <input type="text" id="destNotes" class="form-input" placeholder="E.g., Visit museums">
     </div>
   `, [
     { label: 'Cancel', class: 'btn-secondary', onclick: 'closeModal()' },
-    { label: 'Add', class: 'btn-primary', onclick: `confirmAddCountryToTrip('${countryName.replace(/'/g, "\\'")}')` }
+    {
+      label: 'Add',
+      class: 'btn-primary',
+      onclick: state.trips.length > 0 ? `confirmAddCountryToTrip('${countryName.replace(/'/g, "\\'")}')` : ''
+    }
   ]);
+
+  // Update button state if no trips
+  if (state.trips.length === 0) {
+    const addBtn = document.querySelector('.modal-footer .btn-primary');
+    if (addBtn) {
+      addBtn.disabled = true;
+      addBtn.innerHTML = 'Create Trip First ☝️';
+    }
+  }
 }
 
 function confirmAddCountryToTrip(countryName) {
@@ -725,20 +765,39 @@ function renderDestinationCards(destinations) {
 }
 
 function addDestinationToTrip(destName) {
-  if (state.trips.length === 0) {
-    showToast('Create a trip first from the Home page!', 'warning');
+  // If planning mode, add to temp
+  if (state.planningMode) {
+    if (!state.tempDestinations.includes(destName)) {
+      state.tempDestinations.push(destName);
+      showToast(`Added ${destName} to plan`, 'success');
+      renderExplore(); // Update builder bar
+    } else {
+      showToast(`${destName} is already selected`, 'info');
+    }
     return;
   }
 
+  // Normal mode: Add to existing or new
   const tripOptions = state.trips.map(t =>
     `<option value="${t.id}">${sanitizeHTML(t.name)}</option>`
   ).join('');
 
+  const newTripOption = `<option value="NEW_TRIP">✨ Create New Trip...</option>`;
+
   showModal('Add to Trip', `
-    <div class="form-group">
+    <div class="form-group mb-md">
       <label class="form-label">Select Trip</label>
-      <select id="tripSelect" class="form-select">${tripOptions}</select>
+      <select id="tripSelect" class="form-select" onchange="toggleNewTripName(this.value)">
+         ${tripOptions}
+         ${newTripOption}
+      </select>
     </div>
+    
+    <div id="newTripNameField" class="form-group mb-md hidden">
+       <label class="form-label">Trip Name</label>
+       <input type="text" id="newTripName" class="form-input" placeholder="e.g. My ${destName} Adventure" value="Trip to ${destName}">
+    </div>
+
     <div class="form-group">
       <label class="form-label">Notes (optional)</label>
       <input type="text" id="destNotes" class="form-input" placeholder="E.g., Visit museums">
@@ -747,6 +806,19 @@ function addDestinationToTrip(destName) {
     { label: 'Cancel', class: 'btn-secondary', onclick: 'closeModal()' },
     { label: 'Add', class: 'btn-primary', onclick: `confirmAddDestinationToTrip('${destName.replace(/'/g, "\\'")}')` }
   ]);
+
+  // Auto-show new field if no trips
+  if (state.trips.length === 0) {
+    const select = document.getElementById('tripSelect');
+    select.value = 'NEW_TRIP';
+    document.getElementById('newTripNameField').classList.remove('hidden');
+  }
+}
+
+function toggleNewTripName(val) {
+  const field = document.getElementById('newTripNameField');
+  if (val === 'NEW_TRIP') field.classList.remove('hidden');
+  else field.classList.add('hidden');
 }
 
 // ========== EXPLORE PAGE FILTERS ==========
@@ -836,12 +908,66 @@ function applyFilters() {
 }
 
 function confirmAddDestinationToTrip(destName) {
-  const tripId = document.getElementById('tripSelect').value;
+  const tripSelect = document.getElementById('tripSelect');
+  if (!tripSelect || tripSelect.disabled) return;
+
+  const tripId = tripSelect.value;
   const notes = document.getElementById('destNotes').value;
 
-  addDestination(tripId, destName, notes);
-  closeModal();
-  showToast(`Added ${destName} to trip!`, 'success');
+  // NEW TRIP LOGIC
+  if (tripId === 'NEW_TRIP') {
+    const tripName = document.getElementById('newTripName').value || `Trip to ${destName}`;
+
+    // Create Minimal Trip
+    const newTrip = {
+      id: generateId(),
+      name: tripName,
+      description: 'Created from Explore',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default 1 week
+      destinations: [{ name: destName, notes: notes || 'Added from Explore' }],
+      budget: { total: 0, currency: 'USD', expenses: [] },
+      packingList: [],
+      documents: [],
+      itinerary: [], // Empty initially
+      healthScore: null // No itinerary yet
+    };
+
+    // Auto-generate itinerary for this simple trip?
+    // Let's generate a basic one
+    newTrip.itinerary = generateItinerary(newTrip.startDate, newTrip.endDate, { pace: 'balanced', style: 'balanced', mustDos: [] });
+    newTrip.healthScore = calculateHealthScore(newTrip.itinerary, { pace: 'balanced', style: 'balanced' });
+
+    state.trips.push(newTrip);
+    state.profile.stats.totalTrips++;
+    state.profile.stats.totalDestinations++;
+    saveData();
+
+    showToast(`Created trip "${tripName}"!`, 'success');
+    closeModal();
+
+    // Navigate to it
+    navigateTo('itinerary', newTrip.id);
+    return;
+  }
+
+  // EXISTING TRIP LOGIC
+  const trip = getTripById(tripId);
+  if (trip) {
+    if (!trip.destinations.find(d => d.name === destName)) {
+      trip.destinations.push({ name: destName, notes: notes });
+      saveData();
+      showToast(`Added ${destName} to ${trip.name}`, 'success');
+      closeModal();
+
+      // Update UI if we are on itinerary page
+      if (state.currentView === 'itinerary' && state.currentTripId === tripId) {
+        renderTripDetail(tripId);
+      }
+    } else {
+      showToast(`${destName} is already in this trip`, 'info');
+    }
+  }
 }
 
 // ========== AI CHATBOT SYSTEM ==========
@@ -918,6 +1044,46 @@ function processChatbotResponse(userMessage) {
   const lower = userMessage.toLowerCase();
   const ctx = state.chatbotContext;
 
+  // 1. LOCATION DETECTION (New)
+  // Check if message mentions any known destination
+  let recognizedLocation = null;
+  for (const dest of DESTINATION_DATABASE) {
+    if (lower.includes(dest.name.toLowerCase())) {
+      recognizedLocation = dest;
+      break;
+    }
+  }
+
+  // If location detected, force recommendation of that specific place
+  if (recognizedLocation) {
+    const message = `I found a great match! **${recognizedLocation.name}, ${recognizedLocation.country}** matches your request.\n\n${recognizedLocation.desc}. It's great for ${recognizedLocation.vibe.join(', ')}.`;
+
+    addChatMessage('bot', message);
+
+    // Render single card in chat or just provide link?
+    // Let's reuse recommendation card structure but for single item
+    const chatOutput = document.getElementById('chatOutput');
+    const recommendationHtml = `
+      <div class="chat-message bot-message">
+        <div class="recommendation-card">
+          <img src="https://source.unsplash.com/400x300/?${recognizedLocation.name},travel" alt="${recognizedLocation.name}" class="recommendation-image">
+          <div class="recommendation-content">
+            <h4>${recognizedLocation.name}, ${recognizedLocation.country}</h4>
+            <div class="recommendation-tags">
+              <span class="badge badge-${recognizedLocation.budget}">${recognizedLocation.budget}</span>
+              <span class="badge badge-outline">${recognizedLocation.vibe[0]}</span>
+            </div>
+            <button class="btn btn-sm btn-primary mt-sm" onclick="addDestinationToTrip('${recognizedLocation.name}, ${recognizedLocation.country}')">Add to Trip</button>
+          </div>
+        </div>
+      </div>
+    `;
+    chatOutput.insertAdjacentHTML('beforeend', recommendationHtml);
+    chatOutput.scrollTop = chatOutput.scrollHeight;
+    return;
+  }
+
+  // ... (Existing Logic for Budget/Vibe detection) ...
   // Extract numeric budget first (e.g., "5000", "$5000", "5,000")
   const budgetMatch = userMessage.match(/\$?\s*(\d+(?:,\d{3})*(?:\.\d{2})?)/);
   if (budgetMatch && !ctx.budget) {
@@ -1154,32 +1320,41 @@ function renderWizardStep(step) {
     case 1:
       content.innerHTML = `
         <h3 class="mb-md">Basic Trip Details</h3>
-        <div class="form-group">
-          <label class="form-label">Total Budget</label>
-          <input type="number" id="plannerBudget" class="form-input" placeholder="5000" value="${state.tripPlannerState.budget || ''}">
+        <div class="field-group mb-md">
+          <label class="form-label">Trip Name</label>
+          <input type="text" id="plannerDestination" class="form-input" placeholder="e.g. Summer in Europe" value="${state.tripPlannerState.destination || ''}">
+          <small class="text-muted">Give your trip a name!</small>
         </div>
-        <div class="form-group">
-          <label class="form-label">Currency</label>
-          <select id="plannerCurrency" class="form-select">
-            <option value="USD">USD - US Dollar</option>
-            <option value="EUR">EUR - Euro</option>
-            <option value="GBP">GBP - British Pound</option>
-            <option value="CAD">CAD - Canadian Dollar</option>
-          </select>
+        
+        <!-- NEW DATES SECTION -->
+        <div class="grid grid-2 gap-md mb-md">
+           <div class="field-group">
+            <label class="form-label">Start Date</label>
+            <input type="date" id="plannerStartDate" class="form-input" value="${state.tripPlannerState.startDate || ''}">
+          </div>
+          <div class="field-group">
+            <label class="form-label">End Date</label>
+            <input type="date" id="plannerEndDate" class="form-input" value="${state.tripPlannerState.endDate || ''}">
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Destination</label>
-          <input type="text" id="plannerDestination" class="form-input" placeholder="Paris, Tokyo, Bali..." value="${state.tripPlannerState.destination || ''}">
+
+        <div class="grid grid-2 gap-md">
+          <div class="field-group">
+            <label class="form-label">Total Budget</label>
+            <input type="number" id="plannerBudget" class="form-input" placeholder="5000" value="${state.tripPlannerState.totalBudget || ''}">
+          </div>
+          <div class="field-group">
+            <label class="form-label">Currency</label>
+            <select id="plannerCurrency" class="form-select">
+              <option value="USD">USD - US Dollar</option>
+              <option value="EUR">EUR - Euro</option>
+              <option value="GBP">GBP - British Pound</option>
+              <option value="CAD">CAD - Canadian Dollar</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Start Date</label>
-          <input type="date" id="plannerStartDate" class="form-input" value="${state.tripPlannerState.startDate || ''}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">End Date</label>
-          <input type="date" id="plannerEndDate" class="form-input" value="${state.tripPlannerState.endDate || ''}">
-        </div>
-        <div class="form-group">
+        
+        <div class="form-group mt-md">
           <label class="form-label">Number of Travelers</label>
           <input type="number" id="plannerTravelers" class="form-input" min="1" value="${state.tripPlannerState.travelers || 1}">
         </div>
@@ -1192,13 +1367,13 @@ function renderWizardStep(step) {
           <h3>What's your travel style?</h3>
           <p style="margin-bottom: 1rem;">This helps us tailor your itinerary</p>
           <div class="preference-options">
-            <button class="preference-option ${state.tripPlannerState.style === 'relaxing' ? 'selected' : ''}" onclick="selectPreference('style', 'relaxing')">
+            <button class="preference-option ${state.tripPlannerState.style === 'relaxing' ? 'selected' : ''}" onclick="selectOption('style', 'relaxing', this)">
               🧘 Relaxing<br><small>Mostly downtime at hotel/spa</small>
             </button>
-            <button class="preference-option ${state.tripPlannerState.style === 'balanced' ? 'selected' : ''}" onclick="selectPreference('style', 'balanced')">
+            <button class="preference-option ${state.tripPlannerState.style === 'balanced' ? 'selected' : ''}" onclick="selectOption('style', 'balanced', this)">
               ⚖️ Balanced<br><small>Mix of activities & rest</small>
             </button>
-            <button class="preference-option ${state.tripPlannerState.style === 'active' ? 'selected' : ''}" onclick="selectPreference('style', 'active')">
+            <button class="preference-option ${state.tripPlannerState.style === 'active' ? 'selected' : ''}" onclick="selectOption('style', 'active', this)">
               🏃 Active<br><small>Packed with activities</small>
             </button>
           </div>
@@ -1207,13 +1382,13 @@ function renderWizardStep(step) {
         <div class="preference-question">
           <h3>What pace do you prefer?</h3>
           <div class="preference-options">
-            <button class="preference-option ${state.tripPlannerState.pace === 'relaxed' ? 'selected' : ''}" onclick="selectPreference('pace', 'relaxed')">
+            <button class="preference-option ${state.tripPlannerState.pace === 'relaxed' ? 'selected' : ''}" onclick="selectOption('pace', 'relaxed', this)">
               🐢 Relaxed<br><small>Take it slow</small>
             </button>
-            <button class="preference-option ${state.tripPlannerState.pace === 'moderate' ? 'selected' : ''}" onclick="selectPreference('pace', 'moderate')">
+            <button class="preference-option ${state.tripPlannerState.pace === 'moderate' ? 'selected' : ''}" onclick="selectOption('pace', 'moderate', this)">
               🚶 Moderate<br><small>Comfortable pace</small>
             </button>
-            <button class="preference-option ${state.tripPlannerState.pace === 'packed' ? 'selected' : ''}" onclick="selectPreference('pace', 'packed')">
+            <button class="preference-option ${state.tripPlannerState.pace === 'packed' ? 'selected' : ''}" onclick="selectOption('pace', 'packed', this)">
               🏃 Packed<br><small>See everything</small>
             </button>
           </div>
@@ -1224,7 +1399,7 @@ function renderWizardStep(step) {
           <div class="preference-options">
             ${['Museums', 'Food', 'Shopping', 'Nature', 'Architecture', 'Nightlife'].map(interest => `
               <button class="preference-option ${state.tripPlannerState.interests.includes(interest) ? 'selected' : ''}" 
-                      onclick="toggleInterest('${interest}')">
+                      onclick="toggleInterest('${interest}', this)">
                 ${interest}
               </button>
             `).join('')}
@@ -1281,64 +1456,68 @@ function renderWizardStep(step) {
       break;
 
     case 4:
-      const hotelBudget = Math.round(state.tripPlannerState.budget * 0.40);
-      const dest = state.tripPlannerState.destination;
+      const hotelBudget = Math.round(state.tripPlannerState.budget * 0.40) || 0;
+      const dest = state.tripPlannerState.destination || 'Destination';
       content.innerHTML = `
         <h3 class="mb-md">Choose Your Accommodation</h3>
         <p style="margin-bottom: 1rem;">Based on your ${formatCurrency(hotelBudget, state.tripPlannerState.currency)} lodging budget:</p>
         
-        <div class="hotel-tier-card ${state.tripPlannerState.selectedHotel === 'budget' ? 'selected' : ''}" onclick="selectHotel('budget')">
+        <div class="hotel-tier-card ${state.tripPlannerState.selectedHotel === 'budget' ? 'selected' : ''}" onclick="selectHotel('budget', this)">
           <div class="hotel-tier-badge budget">Budget</div>
           <h4>${dest} Budget Hotel</h4>
           <p>Comfortable accommodation in a great location. Clean rooms, friendly staff, basic amenities.</p>
           <p><strong>${formatCurrency(hotelBudget * 0.4, state.tripPlannerState.currency)}</strong> total</p>
-          <a href="https://www.booking.com/searchresults.html?ss=${encodeURIComponent(dest)}" target="_blank" class="btn btn-sm btn-outline">View on Booking.com</a>
+          <a href="https://www.booking.com/searchresults.html?ss=${encodeURIComponent(dest)}" target="_blank" class="btn btn-sm btn-outline" onclick="event.stopPropagation()">View on Booking.com</a>
         </div>
         
-        <div class="hotel-tier-card ${state.tripPlannerState.selectedHotel === 'mid' ? 'selected' : ''}" onclick="selectHotel('mid')">
+        <div class="hotel-tier-card ${state.tripPlannerState.selectedHotel === 'mid' ? 'selected' : ''}" onclick="selectHotel('mid', this)">
           <div class="hotel-tier-badge mid">Mid-Range</div>
           <h4>${dest} Boutique Hotel</h4>
           <p>Stylish accommodation with excellent amenities. Pool, gym, room service, central location.</p>
           <p><strong>${formatCurrency(hotelBudget * 0.7, state.tripPlannerState.currency)}</strong> total</p>
-          <a href="https://www.booking.com/searchresults.html?ss=${encodeURIComponent(dest)}" target="_blank" class="btn btn-sm btn-outline">View on Booking.com</a>
+          <a href="https://www.booking.com/searchresults.html?ss=${encodeURIComponent(dest)}" target="_blank" class="btn btn-sm btn-outline" onclick="event.stopPropagation()">View on Booking.com</a>
         </div>
         
-        <div class="hotel-tier-card ${state.tripPlannerState.selectedHotel === 'premium' ? 'selected' : ''}" onclick="selectHotel('premium')">
+        <div class="hotel-tier-card ${state.tripPlannerState.selectedHotel === 'premium' ? 'selected' : ''}" onclick="selectHotel('premium', this)">
           <div class="hotel-tier-badge premium">Premium</div>
           <h4>${dest} Luxury Resort</h4>
           <p>5-star luxury experience. Spa, fine dining, concierge service, premium location with views.</p>
           <p><strong>${formatCurrency(hotelBudget * 1.0, state.tripPlannerState.currency)}</strong> total</p>
-          <a href="https://www.booking.com/searchresults.html?ss=${encodeURIComponent(dest)}" target="_blank" class="btn btn-sm btn-outline">View on Booking.com</a>
+          <a href="https://www.booking.com/searchresults.html?ss=${encodeURIComponent(dest)}" target="_blank" class="btn btn-sm btn-outline" onclick="event.stopPropagation()">View on Booking.com</a>
         </div>
       `;
       break;
 
     case 5:
-      const activityBudget = Math.round(state.tripPlannerState.budget * 0.25);
+      const activityBudget = Math.round(state.tripPlannerState.budget * 0.25) || 0;
       const sampleActivities = [
-        { name: 'City Walking Tour', cost: activityBudget * 0.1, duration: '3 hours', desc: 'Explore the main sights with a local guide' },
-        { name: 'Museum Pass', cost: activityBudget * 0.15, duration: 'Full day', desc: 'Access to top museums and cultural sites' },
-        { name: 'Food Tour', cost: activityBudget * 0.2, duration: '4 hours', desc: 'Taste local cuisine at hidden gems' },
-        { name: 'Day Trip', cost: activityBudget * 0.3, duration: 'Full day', desc: 'Excursion to nearby attractions' },
-        { name: 'Cultural Show', cost: activityBudget * 0.12, duration: '2 hours', desc: 'Traditional performance or event' },
-        { name: 'Adventure Activity', cost: activityBudget * 0.25, duration: 'Half day', desc: 'Outdoor adventure suited to location' }
+        { id: 'act1', name: 'City Walking Tour', cost: activityBudget * 0.1, duration: '3 hours', desc: 'Explore the main sights with a local guide' },
+        { id: 'act2', name: 'Museum Pass', cost: activityBudget * 0.15, duration: 'Full day', desc: 'Access to top museums and cultural sites' },
+        { id: 'act3', name: 'Food Tour', cost: activityBudget * 0.2, duration: '4 hours', desc: 'Taste local cuisine at hidden gems' },
+        { id: 'act4', name: 'Day Trip', cost: activityBudget * 0.3, duration: 'Full day', desc: 'Excursion to nearby attractions' },
+        { id: 'act5', name: 'Cultural Show', cost: activityBudget * 0.12, duration: '2 hours', desc: 'Traditional performance or event' },
+        { id: 'act6', name: 'Adventure Activity', cost: activityBudget * 0.25, duration: 'Half day', desc: 'Outdoor adventure suited to location' }
       ];
 
       content.innerHTML = `
         <h3 class="mb-md">Select Activities</h3>
         <p style="margin-bottom: 1rem;">Your activity budget: ${formatCurrency(activityBudget, state.tripPlannerState.currency)}</p>
         
-        ${sampleActivities.map((act, i) => `
-          <div class="activity-card ${state.tripPlannerState.selectedActivities.includes(i) ? 'selected' : ''}" onclick="toggleActivity(${i})">
+        ${sampleActivities.map((act) => `
+          <div class="activity-card ${state.tripPlannerState.selectedActivities.some(a => a.id === act.id) ? 'selected' : ''}" onclick="toggleActivity('${act.id}', this)">
             <h4>${act.name}</h4>
             <p>${act.desc}</p>
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span><strong>${formatCurrency(act.cost, state.tripPlannerState.currency)}</strong> • ${act.duration}</span>
-              <a href="https://www.viator.com/searchResults/all?text=${encodeURIComponent(dest + ' ' + act.name)}" target="_blank" class="btn btn-sm btn-outline" onclick="event.stopPropagation()">Book Now</a>
+              <a href="https://www.viator.com/searchResults/all?text=${encodeURIComponent(state.tripPlannerState.destination + ' ' + act.name)}" target="_blank" class="btn btn-sm btn-outline" onclick="event.stopPropagation()">Book Now</a>
             </div>
           </div>
         `).join('')}
       `;
+      // Pre-load MOCK_ACTIVITIES to ensure they exist for the toggle function
+      if (typeof MOCK_ACTIVITIES === 'undefined' || !MOCK_ACTIVITIES.length) {
+        window.MOCK_ACTIVITIES = sampleActivities;
+      }
       break;
 
     case 6:
@@ -1462,51 +1641,19 @@ function renderWizardStep(step) {
   }
 }
 
-function selectPreference(key, value) {
-  state.tripPlannerState[key] = value;
-  renderWizardStep(wizardStep);
-}
 
-function toggleInterest(interest) {
-  const interests = state.tripPlannerState.interests;
-  const index = interests.indexOf(interest);
-  if (index > -1) {
-    interests.splice(index, 1);
-  } else {
-    interests.push(interest);
-  }
-  renderWizardStep(wizardStep);
-}
-
-function selectHotel(tier) {
-  state.tripPlannerState.selectedHotel = tier;
-  renderWizardStep(wizardStep);
-}
-
-function toggleActivity(index) {
-  const activities = state.tripPlannerState.selectedActivities;
-  const idx = activities.indexOf(index);
-  if (idx > -1) {
-    activities.splice(idx, 1);
-  } else {
-    activities.push(index);
-  }
-  renderWizardStep(wizardStep);
-}
-
-function connectHealthData() {
-  state.tripPlannerState.healthConnected = true;
-  renderWizardStep(wizardStep);
-  showToast('Health data connected! (Simulated)', 'success');
-}
 
 function wizardNext() {
+  console.log('[wizardNext] ENTER - current wizardStep:', wizardStep);
   const ps = state.tripPlannerState;
 
   // Validate current step
   if (wizardStep === 1) {
-    if (!document.getElementById('plannerBudget').value || !document.getElementById('plannerDestination').value) {
-      showToast('Please fill in all required fields', 'error');
+    if (!document.getElementById('plannerBudget').value ||
+      !document.getElementById('plannerDestination').value ||
+      !document.getElementById('plannerStartDate').value ||
+      !document.getElementById('plannerEndDate').value) {
+      showToast('Please fill in all required fields (Destination, Budget, Dates)', 'error');
       return;
     }
     ps.budget = parseFloat(document.getElementById('plannerBudget').value);
@@ -1515,6 +1662,7 @@ function wizardNext() {
     ps.startDate = document.getElementById('plannerStartDate').value;
     ps.endDate = document.getElementById('plannerEndDate').value;
     ps.travelers = parseInt(document.getElementById('plannerTravelers').value);
+    console.log('[wizardNext] Step 1 data captured:', ps);
   }
 
   if (wizardStep === 2) {
@@ -1526,13 +1674,30 @@ function wizardNext() {
 
   if (wizardStep === 7) {
     // Create the trip
-    savePlannedTripWithItinerary();
+    try {
+      savePlannedTrip();
+    } catch (e) {
+      console.error("Trip Creation Failed:", e);
+      showToast('Error creating trip: ' + e.message, 'error');
+    }
     return;
   }
 
   wizardStep++;
+  console.log('[wizardNext] AFTER increment - wizardStep is now:', wizardStep);
   renderWizardSteps();
   renderWizardStep(wizardStep);
+  console.log('[wizardNext] EXIT - rendering step:', wizardStep);
+}
+
+// HELPER FUNCTIONS LOST IN REFACTOR
+
+function generateId() {
+  return '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function formatCurrency(amount, currency) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount);
 }
 
 function wizardPrev() {
@@ -1541,29 +1706,367 @@ function wizardPrev() {
   renderWizardStep(wizardStep);
 }
 
+// ========== WIZARD INTERACTION FUNCTIONS ==========
+// These functions handle button clicks in the wizard steps
+
+function selectOption(category, value, btn) {
+  // Update state
+  state.tripPlannerState[category] = value;
+
+  // Visual Feedback - remove selected from siblings, add to this button
+  if (btn && btn.parentElement) {
+    const container = btn.parentElement;
+    const buttons = container.querySelectorAll('.preference-option, .selection-card, .btn-selection');
+    buttons.forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  }
+
+  console.log('selectOption:', category, '=', value);
+}
+
+function toggleInterest(interest, btn) {
+  const interests = state.tripPlannerState.interests;
+  const index = interests.indexOf(interest);
+
+  if (index === -1) {
+    interests.push(interest);
+    if (btn) btn.classList.add('selected');
+  } else {
+    interests.splice(index, 1);
+    if (btn) btn.classList.remove('selected');
+  }
+
+  console.log('toggleInterest:', interest, 'Interests now:', interests);
+}
+
+function selectHotel(tier, btn) {
+  state.tripPlannerState.selectedHotel = tier;
+
+  // Visual Feedback
+  if (btn) {
+    const container = btn.parentElement || document.getElementById('wizardContent');
+    const cards = container.querySelectorAll('.hotel-tier-card');
+    cards.forEach(c => c.classList.remove('selected'));
+    btn.classList.add('selected');
+  }
+
+  console.log('selectHotel:', tier);
+}
+
+function toggleActivity(activityId, btn) {
+  const activities = state.tripPlannerState.selectedActivities;
+
+  // Find existing activity
+  const existingIndex = activities.findIndex(a => a === activityId || (a && a.id === activityId));
+
+  if (existingIndex === -1) {
+    // Add the activity (store just the ID for simplicity)
+    activities.push(activityId);
+    if (btn) btn.classList.add('selected');
+  } else {
+    // Remove it
+    activities.splice(existingIndex, 1);
+    if (btn) btn.classList.remove('selected');
+  }
+
+  console.log('toggleActivity:', activityId, 'Activities now:', activities);
+}
+
+function connectHealthData() {
+  state.tripPlannerState.healthConnected = true;
+  renderWizardStep(wizardStep);
+  showToast('Health data connected! (Simulated)', 'success');
+}
+
+
 function savePlannedTrip() {
   const ps = state.tripPlannerState;
 
+
+  // Generate Itinerary
+  const itinerary = generateItinerary(ps.startDate, ps.endDate, ps);
+
+  // Calculate Health Score & Mode
+  const healthData = calculateHealthScore(itinerary, ps);
+
   const trip = {
     id: generateId(),
-    name: `Trip to ${ps.destination}`,
+    name: ps.destination.includes('Trip to') ? ps.destination : `Trip to ${ps.destination}`,
     description: `${ps.style} trip with ${ps.pace} pace`,
     startDate: ps.startDate,
     endDate: ps.endDate,
     destinations: [{ name: ps.destination, notes: `Budget: ${formatCurrency(ps.budget, ps.currency)}` }],
     budget: { total: ps.budget, currency: ps.currency, expenses: [] },
+    itinerary: itinerary,
+    healthScore: healthData,
+    currentMode: 'Balanced', // Default mode
+    bodyStats: { // New Body Monitor Data
+      mood: 'Good',
+      sleep: 7,
+      restingHR: 62,
+      steps: 0
+    },
     packingList: [],
     documents: []
   };
 
+  // Merge temp destinations if any
+  if (state.tempDestinations && state.tempDestinations.length > 0) {
+    state.tempDestinations.forEach(d => {
+      if (!trip.destinations.find(existing => existing.name === d)) {
+        trip.destinations.push({ name: d, notes: 'Added from Explore' });
+      }
+    });
+    // Clear temp
+    state.tempDestinations = [];
+    state.planningMode = false;
+  }
+
   state.trips.push(trip);
   state.profile.stats.totalTrips++;
-  state.profile.stats.totalDestinations++;
+  state.profile.stats.totalDestinations += trip.destinations.length;
   saveData();
 
   awardXP(100, 'Created trip with planner');
+
+  // CLOSE THE WIZARD UI
+  closeInlinePlanner();
+
   showToast('Trip created successfully!', 'success');
   navigateTo('itinerary', trip.id);
+}
+
+// ==========================================
+// ITINERARY GENERATION ENGINE (ENHANCED)
+// ==========================================
+function generateItinerary(start, end, prefs) {
+  const startDt = new Date(start);
+  const endDt = new Date(end);
+  const diffTime = Math.abs(endDt - startDt);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  const days = [];
+
+  const activities = [
+    { title: 'Morning Walk & Breakfast', type: 'active', duration: 90, cals: 300, steps: 4000, temp: 18, transit: 10 },
+    { title: 'City Museum Tour', type: 'walking', duration: 120, cals: 200, steps: 3000, temp: 21, transit: 20 },
+    { title: 'Local Market Exploration', type: 'walking', duration: 120, cals: 150, steps: 3000, temp: 27, transit: 15 },
+    { title: 'Relaxing Lunch', type: 'sedentary', duration: 60, cals: 0, steps: 0, temp: 22, transit: 5 },
+    { title: 'Afternoon Hike / Park', type: 'active', duration: 120, cals: 400, steps: 6000, temp: 20, transit: 30 },
+    { title: 'Sunset Viewpoint', type: 'walking', duration: 60, cals: 100, steps: 1500, temp: 19, transit: 15 },
+    { title: 'Dinner at Local Gem', type: 'sedentary', duration: 90, cals: 0, steps: 0, temp: 18, transit: 10 }
+  ];
+
+  for (let i = 0; i < diffDays; i++) {
+    const currentDt = new Date(startDt);
+    currentDt.setDate(startDt.getDate() + i);
+
+    // Distribute Must-Dos
+    let dayActivities = [];
+    if (prefs.mustDos && prefs.mustDos.length > 0 && i < prefs.mustDos.length) {
+      dayActivities.push({
+        title: `Visit ${prefs.mustDos[i]}`,
+        type: 'walking',
+        duration: 120,
+        cals: 200,
+        steps: 2500,
+        temp: 22,
+        transit: 20,
+        isMustDo: true
+      });
+    }
+
+    // Fill remaining day based on pace
+    const slots = prefs.pace === 'packed' ? 4 : (prefs.pace === 'moderate' ? 3 : 2);
+    for (let j = 0; j < slots; j++) {
+      const randomAct = activities[Math.floor(Math.random() * activities.length)];
+      dayActivities.push({ ...randomAct });
+    }
+
+    // Calculate daily stats
+    const dailySteps = dayActivities.reduce((acc, act) => acc + (act.steps || 0), 0);
+    const dailyCals = dayActivities.reduce((acc, act) => acc + (act.cals || 0), 0);
+
+    days.push({
+      day: i + 1,
+      date: currentDt.toISOString().split('T')[0],
+      weekday: currentDt.toLocaleDateString('en-US', { weekday: 'long' }),
+      focus: i === 0 ? 'Arrival' : (i === diffDays - 1 ? 'Departure' : 'Exploration'),
+      activities: dayActivities,
+      healthStats: {
+        steps: dailySteps,
+        calories: dailyCals
+      }
+    });
+  }
+
+  return days;
+}
+
+// ==========================================
+// HEALTH SCORE ALGORITHM
+// ==========================================
+function calculateHealthScore(itinerary, prefs) {
+  let score = 50; // Base score
+  let totalSteps = 0;
+  let activeMinutes = 0;
+
+  itinerary.forEach(day => {
+    totalSteps += day.healthStats.steps;
+    day.activities.forEach(act => {
+      if (act.type === 'active' || act.type === 'walking') {
+        activeMinutes += act.duration;
+      }
+    });
+  });
+
+  const avgSteps = totalSteps / itinerary.length;
+
+  // Scoring Logic
+  if (avgSteps > 10000) score += 30;
+  else if (avgSteps > 7000) score += 20;
+  else if (avgSteps > 5000) score += 10;
+  else score -= 10;
+
+  if (prefs.style === 'active') score += 10;
+  if (prefs.pace === 'packed') score += 5;
+  if (prefs.foodStyle === 'healthy') score += 10;
+
+  // Cap at 100, Min 0
+  score = Math.min(100, Math.max(0, score));
+
+  // Generate Suggestions
+  const suggestions = [];
+  if (avgSteps < 6000) suggestions.push("Try adding a morning walk to boost your step count.");
+  if (prefs.style === 'relaxing' && score < 60) suggestions.push("Even a relaxing trip needs movement! Consider a yoga session.");
+  if (activeMinutes / itinerary.length < 60) suggestions.push("Aim for at least 60 active minutes per day.");
+  if (suggestions.length === 0) suggestions.push("You're doing great! Keep up the active lifestyle.");
+
+  return {
+    score: Math.round(score),
+    rating: score > 80 ? 'Wellness Warrior' : (score > 60 ? 'Balanced Explorer' : 'Chill Seeker'),
+    suggestions: suggestions,
+    totalSteps: totalSteps,
+    avgSteps: Math.round(avgSteps)
+  };
+}
+
+// Global Alias for Create Trip Button
+function showCreateTripModal() {
+  launchInlinePlanner();
+}
+
+// ==========================================
+// ITINERARY GENERATION ENGINE
+// ==========================================
+function generateItinerary(start, end, prefs) {
+  const startDt = new Date(start);
+  const endDt = new Date(end);
+  const diffTime = Math.abs(endDt - startDt);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  const days = [];
+
+  const activities = [
+    { title: 'Morning Walk & Breakfast', type: 'active', duration: 90, cals: 300, steps: 4000 },
+    { title: 'City Museum Tour', type: 'walking', duration: 120, cals: 200, steps: 3000 },
+    { title: 'Local Market Exploration', type: 'walking', duration: 90, cals: 150, steps: 2500 },
+    { title: 'Relaxing Lunch', type: 'sedentary', duration: 60, cals: 0, steps: 0 },
+    { title: 'Afternoon Hike / Park', type: 'active', duration: 120, cals: 400, steps: 6000 },
+    { title: 'Sunset Viewpoint', type: 'walking', duration: 60, cals: 100, steps: 1500 },
+    { title: 'Dinner at Local Gem', type: 'sedentary', duration: 90, cals: 0, steps: 0 }
+  ];
+
+  for (let i = 0; i < diffDays; i++) {
+    const currentDt = new Date(startDt);
+    currentDt.setDate(startDt.getDate() + i);
+
+    // Distribute Must-Dos
+    let dayActivities = [];
+    if (prefs.mustDos && prefs.mustDos.length > 0 && i < prefs.mustDos.length) {
+      dayActivities.push({
+        title: `Visit ${prefs.mustDos[i]}`,
+        type: 'walking',
+        duration: 120,
+        cals: 200,
+        steps: 2500,
+        isMustDo: true
+      });
+    }
+
+    // Fill remaining day based on pace
+    const slots = prefs.pace === 'packed' ? 4 : (prefs.pace === 'moderate' ? 3 : 2);
+    for (let j = 0; j < slots; j++) {
+      const randomAct = activities[Math.floor(Math.random() * activities.length)];
+      dayActivities.push({ ...randomAct });
+    }
+
+    // Sort by type loosely to simulate day flow (Active -> Food -> Active)
+
+    // Calculate daily stats
+    const dailySteps = dayActivities.reduce((acc, act) => acc + (act.steps || 0), 0);
+    const dailyCals = dayActivities.reduce((acc, act) => acc + (act.cals || 0), 0);
+
+    days.push({
+      day: i + 1,
+      date: currentDt.toISOString().split('T')[0],
+      weekday: currentDt.toLocaleDateString('en-US', { weekday: 'long' }),
+      focus: i === 0 ? 'Arrival' : (i === diffDays - 1 ? 'Departure' : 'Exploration'),
+      activities: dayActivities,
+      healthStats: {
+        steps: dailySteps,
+        calories: dailyCals
+      }
+    });
+  }
+
+  return days;
+}
+
+// ==========================================
+// HEALTH SCORE ALGORITHM
+// ==========================================
+function calculateHealthScore(itinerary, prefs) {
+  let score = 50; // Base score
+  let totalSteps = 0;
+  let activeMinutes = 0;
+
+  itinerary.forEach(day => {
+    totalSteps += day.healthStats.steps;
+    day.activities.forEach(act => {
+      if (act.type === 'active' || act.type === 'walking') {
+        activeMinutes += act.duration;
+      }
+    });
+  });
+
+  const avgSteps = totalSteps / itinerary.length;
+
+  // Scoring Logic
+  if (avgSteps > 10000) score += 30;
+  else if (avgSteps > 7000) score += 20;
+  else if (avgSteps > 5000) score += 10;
+  else score -= 10;
+
+  if (prefs.style === 'active') score += 10;
+  if (prefs.pace === 'packed') score += 5;
+  if (prefs.foodStyle === 'healthy') score += 10;
+
+  // Cap at 100, Min 0
+  score = Math.min(100, Math.max(0, score));
+
+  // Generate Suggestions
+  const suggestions = [];
+  if (avgSteps < 6000) suggestions.push("Try adding a morning walk to boost your step count.");
+  if (prefs.style === 'relaxing' && score < 60) suggestions.push("Even a relaxing trip needs movement! Consider a yoga session.");
+  if (activeMinutes / itinerary.length < 60) suggestions.push("Aim for at least 60 active minutes per day.");
+  if (suggestions.length === 0) suggestions.push("You're doing great! Keep up the active lifestyle.");
+
+  return {
+    score: Math.round(score),
+    rating: score > 80 ? 'Wellness Warrior' : (score > 60 ? 'Balanced Explorer' : 'Chill Seeker'),
+    suggestions: suggestions,
+    totalSteps: totalSteps,
+    avgSteps: Math.round(avgSteps)
+  };
 }
 
 // ========== ROUTING ==========
@@ -1691,7 +2194,10 @@ function renderHome() {
   document.getElementById('homePage').classList.remove('hidden');
   const grid = document.getElementById('tripsGrid');
 
-  if (state.trips.length === 0) {
+  // Safety check and filter
+  const validTrips = (state.trips || []).filter(t => t && t.id && t.name);
+
+  if (validTrips.length === 0) {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column: 1 / -1;">
         <div class="empty-icon">🎒</div>
@@ -1703,7 +2209,7 @@ function renderHome() {
     return;
   }
 
-  grid.innerHTML = state.trips.map(trip => `
+  grid.innerHTML = validTrips.map(trip => `
     <div class="card trip-card">
       <div class="card-header">
         <h3 class="card-title">${sanitizeHTML(trip.name)}</h3>
@@ -1714,11 +2220,11 @@ function renderHome() {
         <div class="trip-stats">
           <div class="trip-stat">
             <span class="trip-stat-icon">📍</span>
-            <span>${trip.destinations.length} destinations</span>
+            <span>${trip.destinations ? trip.destinations.length : 0} destinations</span>
           </div>
           <div class="trip-stat">
             <span class="trip-stat-icon">💰</span>
-            <span>${trip.expenses?.length || 0} expenses</span>
+            <span>${trip.budget?.expenses?.length || 0} expenses</span>
           </div>
         </div>
       </div>
@@ -1730,12 +2236,17 @@ function renderHome() {
   `).join('');
 }
 
+// ========== TRIP DETAIL PAGE ==========
+// ========== TRIP DETAIL PAGE ==========
 function renderTripDetail(tripId) {
+  console.log('Rendering Trip Detail for:', tripId);
   const trip = getTripById(tripId);
   if (!trip) {
+    console.error('Trip not found:', tripId);
     navigateTo('home');
     return;
   }
+  console.log('Trip Data:', trip);
 
   document.getElementById('tripDetailPage').classList.remove('hidden');
 
@@ -1751,38 +2262,108 @@ function renderTripDetail(tripId) {
     </div>
   `;
 
+  // Render all tab contents so they are populated when user clicks tabs
   renderOverviewTab(trip);
+  renderItinerary(trip);
+  renderBudgetTab(trip);
+  renderMapTab(trip);
+  renderPackingTab(trip);
+  renderDocumentsTab(trip);
+
+  // Attach Tab Listeners (Dynamically if needed, or rely on global)
+  // Ensure we switch to overview by default or keep current
+  console.log('Switching to Overview Tab');
+  switchTab('overview');
 }
 
+// Global Tab Switching Logic
+function switchTab(tabName) {
+  console.log('Switching tab to:', tabName);
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => {
+    c.classList.toggle('active', c.id === `${tabName}Tab`);
+    if (c.id === `${tabName}Tab`) console.log('Activating tab content:', c.id);
+  });
+  state.currentTab = tabName;
+}
+
+// ========== TAB RENDERING ==========
 function renderOverviewTab(trip) {
-  document.getElementById('overviewTab').innerHTML = `
-    <div class="card">
-      <div class="card-header flex-between">
-        <h3>Destinations <span class="badge">${trip.destinations.length}</span></h3>
-        <button class="btn btn-sm btn-primary" onclick="showAddDestinationModal('${trip.id}')">+ Add</button>
+  console.log('Rendering Overview Tab', trip);
+  const container = document.getElementById('overviewTab');
+  if (!container) {
+    console.error('Overview Tab Container Not Found!');
+    return;
+  }
+
+  // Health Score HTML
+  let healthHTML = '';
+  if (trip.healthScore) {
+    const hs = trip.healthScore;
+    const color = hs.score > 80 ? '#1F7A5A' : (hs.score > 50 ? '#F2C94C' : '#EB5757');
+
+    healthHTML = `
+        <div class="card mb-lg">
+          <div class="flex-between align-center mb-md">
+            <div>
+               <h3 class="mb-xs">Health Score</h3>
+               <div class="text-sm text-muted">Based on your itinerary</div>
+            </div>
+            <div style="text-align: right;">
+               <div style="font-size: 2rem; font-weight: 800; color: ${color};">${hs.score}</div>
+               <div class="badge" style="background: ${color}20; color: ${color};">${hs.rating}</div>
+            </div>
+          </div>
+          
+          <div class="mb-md">
+            <div class="flex-between mb-xs">
+              <span>Average Daily Steps</span>
+              <strong>${hs.avgSteps.toLocaleString()} 👣</strong>
+            </div>
+            <div class="progress-bar">
+               <div class="progress-fill" style="width: ${Math.min(100, (hs.avgSteps / 10000) * 100)}%; background-color: ${color};"></div>
+            </div>
+          </div>
+          
+          <div class="p-sm bg-light rounded">
+            <strong>💡 Suggestion:</strong> ${hs.suggestions[0]}
+          </div>
+        </div>
+      `;
+  } else {
+    console.warn('Trip has no healthScore');
+  }
+
+  container.innerHTML = `
+    <div class="grid grid-2 gap-lg">
+      <div class="trip-stats-col">
+          ${healthHTML}
+          
+          <div class="card mb-lg">
+             <div class="flex-between mb-md">
+                <h3>Destinations</h3>
+                <button class="btn btn-sm btn-primary" onclick="showAddDestinationModal('${trip.id}')">+ Add</button>
+             </div>
+             <ul class="dest-list">
+               ${(trip.destinations || []).map((d, i) => `
+                 <li class="card p-sm mb-sm flex-between align-center">
+                    <span>📍 ${d.name} <small class="text-muted">(${d.notes || 'No notes'})</small></span>
+                    <button class="btn btn-sm btn-icon btn-danger" onclick="deleteDestination('${trip.id}', ${i})">🗑️</button>
+                 </li>
+               `).join('')}
+             </ul>
+             ${(!trip.destinations || trip.destinations.length === 0) ? '<p class="text-muted">No destinations yet.</p>' : ''}
+          </div>
       </div>
-      <div class="card-body">
-        ${trip.destinations.length === 0 ? `
-          <div class="empty-state">
-            <div class="empty-icon">📍</div>
-            <p class="empty-message">No destinations added yet</p>
-          </div>
-        ` : `
-          <div class="destination-list">
-            ${trip.destinations.map((dest, i) => `
-              <div class="destination-item">
-                <div class="destination-info">
-                  <div class="destination-name">${sanitizeHTML(dest.name)}</div>
-                  ${dest.notes ? `<div class="destination-notes">${sanitizeHTML(dest.notes)}</div>` : ''}
-                </div>
-                <div class="destination-actions">
-                  <button class="btn btn-sm btn-icon btn-outline" onclick="showEditDestinationModal('${trip.id}', ${i}, '${sanitizeHTML(dest.name).replace(/'/g, "\\'")}', '${sanitizeHTML(dest.notes).replace(/'/g, "\\'")}')" title="Edit">✏️</button>
-                  <button class="btn btn-sm btn-icon btn-danger" onclick="deleteDestination('${trip.id}', ${i})" title="Delete">🗑️</button>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `}
+      
+      <div class="trip-details-col">
+         <div class="card">
+           <h3 class="mb-md">Budget Overview</h3>
+           <div class="text-3xl font-bold mb-xs">${formatCurrency(trip.budget?.total || 0, trip.budget?.currency || 'USD')}</div>
+           <p class="text-muted">Total Budget</p>
+         </div>
       </div>
     </div>
   `;
@@ -1795,7 +2376,7 @@ function renderBudgetTab(trip) {
   const percentage = total > 0 ? (spent / total) * 100 : 0;
 
   document.getElementById('budgetTab').innerHTML = `
-    <div class="card">
+  < div class="card" >
       <div class="card-header">
         <h3>Budget Overview</h3>
         ${total === 0 ? `<button class="btn btn-sm btn-primary" onclick="showSetBudgetModal('${trip.id}')">Set Budget</button>` : ''}
@@ -1842,15 +2423,15 @@ function renderBudgetTab(trip) {
           </div>
         `}
       </div>
-    </div>
+    </div >
   `;
 }
 
 function renderMapTab(trip) {
   document.getElementById('mapTab').innerHTML = `
-    <div id="mapContainer" class="map-container"></div>
+  < div id = "mapContainer" class="map-container" ></div >
     <div id="mapInfo" class="map-info"></div>
-  `;
+`;
 
   setTimeout(() => initializeMap(trip), 100);
 }
@@ -1864,7 +2445,7 @@ function renderPackingTab(trip) {
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
 
   document.getElementById('packingTab').innerHTML = `
-    <div class="card">
+  < div class="card" >
       <div class="card-header">
         <h3>Packing List</h3>
         <div style="display: flex; gap: 0.5rem;">
@@ -1915,7 +2496,7 @@ function renderPackingTab(trip) {
           </div>
         `}
       </div>
-    </div>
+    </div >
   `;
 }
 
@@ -1923,7 +2504,7 @@ function renderDocumentsTab(trip) {
   const typeIcons = { Passport: '🛂', Visa: '📋', Insurance: '🏥', Ticket: '🎫', Other: '📄' };
 
   document.getElementById('documentsTab').innerHTML = `
-    <div class="card">
+  < div class="card" >
       <div class="card-header flex-between">
         <h3>Documents <span class="badge">${trip.documents.length}</span></h3>
         <button class="btn btn-sm btn-primary" onclick="showUploadDocumentModal('${trip.id}')">+ Upload</button>
@@ -1950,13 +2531,56 @@ function renderDocumentsTab(trip) {
           </div>
         `}
       </div>
-    </div>
+    </div >
   `;
 }
 
+// ========== EXPLORE PAGE ==========
 function renderExplore() {
-  document.getElementById('explorePage').classList.remove('hidden');
-  searchCountries('');
+  const explorePage = document.getElementById('explorePage');
+  explorePage.classList.remove('hidden');
+
+  // PLANNING MODE BAR
+  let builderBar = document.getElementById('tripBuilderBar');
+  if (state.planningMode) {
+    if (!builderBar) {
+      builderBar = document.createElement('div');
+      builderBar.id = 'tripBuilderBar';
+      builderBar.className = 'trip-builder-bar';
+      builderBar.innerHTML = `
+        <div class="container flex-between align-center">
+          <div>
+            <span class="text-lg mr-sm">🏗️ <b>Trip Builder</b></span>
+            <span id="builderDestCount" class="badge badge-primary">${state.tempDestinations.length} places selected</span>
+          </div>
+          <div>
+            <button class="btn btn-sm btn-outline mr-sm" onclick="cancelPlanningMode()">Cancel</button>
+            <button class="btn btn-sm btn-primary" onclick="launchInlinePlanner()">Done & Plan ➔</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(builderBar);
+    } else {
+      // Update count
+      const countBadge = document.getElementById('builderDestCount');
+      if (countBadge) countBadge.innerText = `${state.tempDestinations.length} places selected`;
+    }
+  } else if (builderBar) {
+    builderBar.remove();
+  }
+
+  // Default search if empty
+  const countryGrid = document.getElementById('countryGrid');
+  if (!countryGrid.hasChildNodes()) {
+    searchCountries(''); // Load all
+  }
+}
+
+function cancelPlanningMode() {
+  state.planningMode = false;
+  state.tempDestinations = [];
+  renderExplore();
+  showToast('Planning cancelled', 'info');
 }
 
 function renderProfile() {
@@ -1994,21 +2618,24 @@ function renderProfile() {
 // ========== MODAL HELPERS ==========
 function showCreateTripModal() {
   showModal('Create New Trip', `
-    <div class="form-group">
-      <label class="form-label">Trip Name</label>
-      <input type="text" id="tripName" class="form-input" placeholder="Summer in Europe" required>
+    <div class="field-group">
+      <label>Your Name for this Trip</label>
+      <input type="text" id="tripDestination" value="${state.tripPlannerState.destination}" placeholder="e.g. Summer in Europe">
+      <small class="text-muted">If entering specific place, type it here. If exploring multiple, give it a fun name!</small>
     </div>
-    <div class="form-group">
-      <label class="form-label">Description</label>
-      <textarea id="tripDesc" class="form-textarea" placeholder="Describe your adventure..."></textarea>
+    <div class="grid grid-2 gap-md mt-md">
+      <div class="field-group">
+        <label>Start Date</label>
+        <input type="date" id="tripStartDate" value="${state.tripPlannerState.startDate}" class="form-input">
+      </div>
+       <div class="field-group">
+        <label>End Date</label>
+        <input type="date" id="tripEndDate" value="${state.tripPlannerState.endDate}" class="form-input">
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Start Date</label>
-      <input type="date" id="tripStart" class="form-input" required>
-    </div>
-    <div class="form-group">
-      <label class="form-label">End Date</label>
-      <input type="date" id="tripEnd" class="form-input" required>
+    <div class="field-group mt-md">
+      <label>Who is traveling?</label>
+      <input type="number" id="travelers" value="${state.tripPlannerState.travelers}" min="1" class="form-input">
     </div>
   `, [
     { label: 'Cancel', class: 'btn-secondary', onclick: 'closeModal()' },
@@ -2210,38 +2837,8 @@ function shareTrip(tripId) {
   }
 }
 
-// ========== TAB SWITCHING ==========
-function switchTab(tripId, tabName) {
-  state.currentTab = tabName;
-
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.tab === tabName);
-  });
-
-  document.querySelectorAll('.tab-content').forEach(content => {
-    content.classList.remove('active');
-  });
-
-  const trip = getTripById(tripId);
-  if (!trip) return;
-
-  if (tabName === 'overview') {
-    document.getElementById('overviewTab').classList.add('active');
-    renderOverviewTab(trip);
-  } else if (tabName === 'budget') {
-    document.getElementById('budgetTab').classList.add('active');
-    renderBudgetTab(trip);
-  } else if (tabName === 'map') {
-    document.getElementById('mapTab').classList.add('active');
-    renderMapTab(trip);
-  } else if (tabName === 'packing') {
-    document.getElementById('packingTab').classList.add('active');
-    renderPackingTab(trip);
-  } else if (tabName === 'documents') {
-    document.getElementById('documentsTab').classList.add('active');
-    renderDocumentsTab(trip);
-  }
-}
+// NOTE: switchTab function is defined earlier (line 2280) and takes only tabName argument
+// Do NOT redefine it here. The global event delegation handles tab switching.
 
 // ========== INITIALIZATION ==========
 document.addEventListener('DOMContentLoaded', () => {
@@ -2254,7 +2851,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('tripTabs').addEventListener('click', (e) => {
     if (e.target.classList.contains('tab')) {
-      switchTab(state.currentTripId, e.target.dataset.tab);
+      switchTab(e.target.dataset.tab);
     }
   });
 
@@ -2274,17 +2871,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Wizard navigation
-  const wizardNextBtn = document.getElementById('wizardNext');
-  const wizardPrevBtn = document.getElementById('wizardPrev');
-
-  if (wizardNextBtn) {
-    wizardNextBtn.addEventListener('click', wizardNext);
-  }
-
-  if (wizardPrevBtn) {
-    wizardPrevBtn.addEventListener('click', wizardPrev);
-  }
+  // NOTE: Wizard navigation is wired in initInlinePlannerListeners()
+  // Do NOT add duplicate event listeners here
 
   // Filter panel toggle
   const toggleFiltersBtn = document.getElementById('toggleFilters');
@@ -2415,7 +3003,7 @@ function performAutocompleteSearch(query, inputId, dropdownId) {
         icon: '???',
         name: dest.name,
         country: dest.country,
-        meta: `${dest.country} � City`,
+        meta: `${dest.country} • City`,
         budget: dest.budget,
         data: dest
       });
@@ -2553,8 +3141,66 @@ function handleAutocompleteKeyboard(e, inputId, dropdownId) {
 // INLINE TRIP PLANNER INTEGRATION
 // ==============================================
 
-// Launch the inline trip planner wizard
+// Launch the inline trip planner wizard (Branching Entry Point)
+// Launch the inline trip planner wizard (Branching Entry Point)
 function launchInlinePlanner() {
+  console.log('Launching Planner. Mode:', state.planningMode, 'Destinations:', state.tempDestinations);
+
+  // ROBUST CHECK: If we have temp destinations, we are definitely in planning mode
+  if (state.tempDestinations && state.tempDestinations.length > 0) {
+    startPlanningWizard(state.tempDestinations);
+    return;
+  }
+
+  // Show Choice Modal
+  const content = `
+    <div class="text-center p-md">
+      <div class="emoji-xl mb-md">✨</div>
+      <h3 class="mb-md">How would you like to start?</h3>
+      <div class="grid grid-2 gap-md">
+        <button class="btn btn-outline p-lg text-center" style="height: auto; white-space: normal; flex-direction: column; width: 100%; min-height: 180px;" onclick="closeModal(); startPlanningWizard()">
+          <div class="text-2xl mb-sm">📍</div>
+          <div class="font-bold">I know where I'm going</div>
+          <div class="text-xs text-muted mt-xs" style="opacity: 0.8; font-weight: 400;">Enter a specific destination</div>
+        </button>
+        <button class="btn btn-primary p-lg text-center" style="height: auto; white-space: normal; flex-direction: column; width: 100%; min-height: 180px;" onclick="closeModal(); enterExplorePlanningMode()">
+          <div class="text-2xl mb-sm">🌍</div>
+          <div class="font-bold">Inspire Me</div>
+          <div class="text-xs text-light mt-xs" style="opacity: 0.9; font-weight: 400;">Browse & select places to visit</div>
+        </button>
+      </div>
+    </div>
+  `;
+  showModal('Create New Trip', content, []);
+}
+
+function initializeEventListeners() {
+  initInlinePlannerListeners();
+
+  // ROBUST TAB SWITCHING (Event Delegation)
+  // This works even if tabs are re-rendered
+  document.body.addEventListener('click', (e) => {
+    if (e.target.matches('.tab')) {
+      const target = e.target.dataset.tab;
+      if (target) {
+        console.log('Tab Clicked via Delegation:', target);
+        switchTab(target);
+      }
+    }
+  });
+
+  console.log('✅ Global Event Listeners Initialized (Delegated)');
+}
+
+function enterExplorePlanningMode() {
+  state.planningMode = true;
+  state.tempDestinations = [];
+  navigateTo('explore');
+  showToast('Planning Mode: Select destinations to build your trip! 🏗️', 'info');
+  renderExplore(); // Re-render to show trip builder bar
+}
+
+function startPlanningWizard(prefilledDestinations = []) {
   const overlay = document.getElementById('inlinePlannerOverlay');
   if (!overlay) {
     console.error('Inline planner overlay not found');
@@ -2562,20 +3208,21 @@ function launchInlinePlanner() {
   }
 
   // Reset wizard state for new trip creation
-  wizardStep = 0;
+  wizardStep = 1;
   state.tripPlannerState = {
-    destination: '',
+    destination: prefilledDestinations.length > 0 ? prefilledDestinations.join(', ') : '',
     startDate: '',
     endDate: '',
     travelers: 1,
-    totalBudget: 0,
-    pace: '',
-    foodStyle: '',
-    accommodation: '',
+    budget: '', // Changed from totalBudget to match wizardNext validation
+    currency: 'USD',
+    pace: 'moderate',
+    style: 'balanced', // Renamed from foodStyle/accommodation mismatch
     interests: [],
+    mustDos: [],
     selectedHotel: null,
     selectedActivities: [],
-    healthData: null
+    healthConnected: false
   };
 
   // Show overlay
@@ -2583,11 +3230,13 @@ function launchInlinePlanner() {
 
   // Initialize wizard
   renderWizardSteps();
-  renderWizardStep();
+  renderWizardStep(1);
 
   // Prevent body scroll
   document.body.style.overflow = 'hidden';
 }
+
+
 
 // Close the inline trip planner wizard
 function closeInlinePlanner() {
@@ -2603,151 +3252,290 @@ function closeInlinePlanner() {
   wizardStep = 0;
 }
 
-// Updated savePlannedTrip function to persist itinerary
-function savePlannedTripWithItinerary() {
-  const ps = state.tripPlannerState;
+// ========== WIZARD INTERACTION FUNCTIONS (RESTORED) ==========
 
-  if (!ps.destination || !ps.startDate || !ps.endDate) {
-    showToast('âš ï¸ Please complete all required fields');
+function selectOption(category, value, btn) {
+  // Update state
+  state.tripPlannerState[category] = value;
+
+  // Visual Feedback
+  const container = btn.parentElement;
+  const buttons = container.querySelectorAll('.selection-card, .btn-selection'); // Handle both styles
+  buttons.forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function toggleInterest(interest, btn) {
+  const index = state.tripPlannerState.interests.indexOf(interest);
+  if (index === -1) {
+    state.tripPlannerState.interests.push(interest);
+    btn.classList.add('selected');
+  } else {
+    state.tripPlannerState.interests.splice(index, 1);
+    btn.classList.remove('selected');
+  }
+}
+
+function selectHotel(hotelId, btn) {
+  // Find hotel object
+  const hotel = MOCK_HOTELS.find(h => h.id === hotelId);
+  state.tripPlannerState.selectedHotel = hotel;
+
+  // Visual Feedback
+  const container = document.getElementById('hotelSelectionContainer');
+  const cards = container.querySelectorAll('.selection-card');
+  cards.forEach(c => c.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function toggleActivity(activityId, btn) {
+  const activity = MOCK_ACTIVITIES.find(a => a.id === activityId);
+  if (!activity) return;
+
+  const index = state.tripPlannerState.selectedActivities.findIndex(a => a.id === activityId);
+
+  if (index === -1) {
+    state.tripPlannerState.selectedActivities.push(activity);
+    btn.classList.add('selected');
+  } else {
+    state.tripPlannerState.selectedActivities.splice(index, 1);
+    btn.classList.remove('selected');
+  }
+}
+
+// NOTE: wizardPrev and wizardNext functions are defined earlier in the file
+// Do NOT redefine them here
+
+// Updated savePlannedTrip function to persist itinerary
+
+
+// ==========================================
+// HEALTH DASHBOARD & DETAILED ITINERARY
+// ==========================================
+
+function renderHealthDashboard(trip) {
+  const mode = trip.currentMode || 'Balanced';
+  const body = trip.bodyStats || { mood: 'Good', sleep: 7, restingHR: 60, steps: 0 };
+  const energy = 95; // Mock energy used
+  const energyLimit = mode === 'Protect' ? 80 : (mode === 'Balanced' ? 120 : 180);
+
+  return `
+    <!-- Mode Selection -->
+    <div class="card mb-lg">
+      <h3 class="mb-sm">Current Mode</h3>
+      <div class="mode-selector">
+        <div class="mode-card ${mode === 'Protect' ? 'active' : ''}" onclick="setTripMode('${trip.id}', 'Protect')">
+           <div class="mode-header">🛡️ Protect</div>
+           <div class="mode-desc">Minimize strain, prioritize recovery</div>
+           <div class="text-xs text-muted mt-xs">Strain limit: 80</div>
+        </div>
+        <div class="mode-card ${mode === 'Balanced' ? 'active' : ''}" onclick="setTripMode('${trip.id}', 'Balanced')">
+           <div class="mode-header">⚖️ Balanced</div>
+           <div class="mode-desc">Sustainable energy, strategic recovery</div>
+           <div class="text-xs text-muted mt-xs">Strain limit: 120</div>
+        </div>
+        <div class="mode-card ${mode === 'Go Big' ? 'active' : ''}" onclick="setTripMode('${trip.id}', 'Go Big')">
+           <div class="mode-header">🚀 Go Big</div>
+           <div class="mode-desc">Maximum experience, accept fatigue</div>
+           <div class="text-xs text-muted mt-xs">Strain limit: 180</div>
+        </div>
+      </div>
+      
+      <div>
+        <div class="flex-between text-sm mb-xs">
+           <strong>Today's Energy Use</strong>
+           <span>${energy} / ${energyLimit}</span>
+        </div>
+        <div class="energy-bar-container">
+           <div class="energy-fill" style="width: ${(energy / energyLimit) * 100}%"></div>
+        </div>
+        <div class="flex-between text-xs text-muted mt-xs">
+           <span>🟢 Looking good</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Body Monitor -->
+    <div class="card mb-lg body-monitor">
+      <div class="flex-between mb-md">
+         <h3>Body Monitor</h3>
+         <button class="btn btn-sm btn-outline" onclick="simulateBodyData('${trip.id}')">⚡ Simulate Data</button>
+      </div>
+      
+      <div class="monitor-grid">
+         <div class="monitor-row">
+            <div class="monitor-label">😴 Sleep Quality</div>
+            <div class="monitor-value">${body.sleep}/10 <span class="text-xs text-muted font-normal">Normal</span></div>
+         </div>
+         <div class="monitor-row">
+            <div class="monitor-label">😐 Mood</div>
+            <div class="monitor-value">${body.mood}</div>
+         </div>
+         <div class="monitor-row">
+            <div class="monitor-label">❤️ Resting HR</div>
+            <div class="monitor-value">${body.restingHR} bpm</div>
+         </div>
+         <div class="monitor-row">
+            <div class="monitor-label">👣 Steps Today</div>
+            <div class="monitor-value">${(body.steps || 0).toLocaleString()}</div>
+         </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderItinerary(trip) {
+  const container = document.getElementById('itineraryTab');
+  if (!trip.itinerary || trip.itinerary.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>No itinerary generated yet.</p></div>';
     return;
   }
 
-  // Generate full itinerary
-  const itinerary = generateCompleteItinerary(ps);
+  const dashboardHTML = renderHealthDashboard(trip);
 
-  // Create new trip with itinerary data
-  const trip = {
-    id: generateId(),
-    name: ps.destination,
-    description: `${ps.pace || 'Custom'} pace trip to ${ps.destination}`,
-    startDate: ps.startDate,
-    endDate: ps.endDate,
-    destinations: [ps.destination],
-    expenses: [],
-    packingList: [],
-    documents: [],
-    // NEW: Itinerary data
-    itinerary: {
-      days: itinerary.days,
-      budget: {
-        total: ps.totalBudget,
-        lodging: Math.round(ps.totalBudget * 0.4),
-        activities: Math.round(ps.totalBudget * 0.25),
-        food: Math.round(ps.totalBudget * 0.25),
-        transport: Math.round(ps.totalBudget * 0.1)
-      },
-      hotelDetails: ps.selectedHotel,
-      preferences: {
-        pace: ps.pace,
-        foodStyle: ps.foodStyle,
-        accommodation: ps.accommodation,
-        interests: ps.interests
-      },
-      healthPreferences: ps.healthData
-    }
-  };
+  const itineraryHTML = trip.itinerary.map(day => `
+    <div class="itinerary-day">
+      <div class="day-header flex-between align-center">
+         <div>
+           <h3 class="mb-none">Day ${day.day} of ${trip.itinerary.length}</h3>
+           <span class="text-muted">${day.weekday} • ${day.focus}</span>
+         </div>
+         <div class="badge badge-primary">${day.healthStats.steps} steps exp.</div>
+      </div>
+      
+      <div class="activity-timeline">
+         ${day.activities.map(act => `
+            <div class="detailed-activity-card">
+               <div class="act-header">
+                  <span>${act.title}</span>
+                  <span class="text-muted font-normal">${act.duration} min</span>
+               </div>
+               <div class="act-body">
+                  <div class="act-stats-grid">
+                     <div class="act-stat">🚶 Walking: ${act.steps || 0} steps</div>
+                     <div class="act-stat">🚍 Transit: ${act.transit || 0} min</div>
+                     <div class="act-stat">🌡️ Temp: ${act.temp || 20}°C</div>
+                     <div class="act-stat">⏱️ Duration: ${act.duration} min</div>
+                  </div>
+               </div>
+            </div>
+         `).join('')}
+      </div>
+    </div>
+  `).join('');
 
-  state.trips.push(trip);
-  saveState();
-
-  // Close inline planner
-  closeInlinePlanner();
-
-  // Navigate to trip detail
-  navigateTo('itinerary', trip.id);
-
-  // Show success message
-  showToast('ðŸŽ‰ Trip created with full itinerary!');
-  addXP(100);
+  container.innerHTML = `
+    <div style="font-family: 'Inter', sans-serif;">
+       ${dashboardHTML}
+       ${itineraryHTML}
+    </div>
+  `;
 }
 
-// Generate complete day-by-day itinerary
-function generateCompleteItinerary(plannerState) {
-  const { destination, startDate, endDate, interests, pace } = plannerState;
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const dayCount = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+// Interactive helper functions
+window.setTripMode = function (tripId, mode) {
+  const trip = state.trips.find(t => t.id === tripId);
+  if (trip) {
+    trip.currentMode = mode;
+    renderItinerary(trip); // Re-render to update UI
+    saveData();
+  }
+};
 
-  const days = [];
+window.simulateBodyData = function (tripId) {
+  const trip = state.trips.find(t => t.id === tripId);
+  if (trip) {
+    if (!trip.bodyStats) trip.bodyStats = {};
+    trip.bodyStats.sleep = Math.floor(Math.random() * 4) + 6; // 6-10
+    trip.bodyStats.restingHR = Math.floor(Math.random() * 20) + 55; // 55-75
+    trip.bodyStats.steps = Math.floor(Math.random() * 10000);
+    trip.bodyStats.mood = ['Good', 'Great', 'Tired', 'Energetic'][Math.floor(Math.random() * 4)];
+    renderItinerary(trip);
+    saveData();
+    showToast('Body metrics updated from generic wearable', 'success');
+  }
+};
 
-  // Get destination-specific activities
-  const destData = DESTINATION_DATABASE.find(d =>
-    d.name.toLowerCase().includes(destination.toLowerCase()) ||
-    destination.toLowerCase().includes(d.name.toLowerCase())
-  );
+// ==========================================
+// INLINE PLANNER & WIZARD ENGINE
+// ==========================================
 
-  for (let i = 0; i < dayCount; i++) {
-    const currentDate = new Date(start);
-    currentDate.setDate(start.getDate() + i);
-
-    const activities = generateDayActivities(i + 1, interests, pace, destData);
-
-    days.push({
-      dayNumber: i + 1,
-      date: currentDate.toISOString().split('T')[0],
-      activities: activities,
-      notes: ''
-    });
+function launchInlinePlanner() {
+  if (state.planningMode) {
+    startPlanningWizard();
+    return;
   }
 
-  return { days };
+  // Clean choice modal
+  showModal('Create New Trip', `
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+       <button class="btn btn-outline" style="flex: 1; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; text-align: center; white-space: normal;" onclick="startPlanningWizard()">
+          <span style="font-size: 2rem;">🎯</span>
+          <span style="font-weight: bold; font-size: 1.1rem;">I know where I'm going</span>
+          <span style="font-size: 0.9rem; opacity: 0.8;">Go straight to the planner</span>
+       </button>
+       
+       <button class="btn btn-outline" style="flex: 1; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; text-align: center; white-space: normal;" onclick="enterExplorePlanningMode()">
+          <span style="font-size: 2rem;">🌍</span>
+          <span style="font-weight: bold; font-size: 1.1rem;">Inspire Me</span>
+          <span style="font-size: 0.9rem; opacity: 0.8;">Browse destinations first</span>
+       </button>
+    </div>
+  `, [], 'planning-choice-modal');
 }
 
-// Generate activities for a specific day
-function generateDayActivities(dayNum, interests, pace, destData) {
-  const activities = [];
-  const activityCount = pace === 'Relaxed' ? 2 : pace === 'Packed' ? 5 : 3;
-
-  const timeSlots = ['Morning', 'Afternoon', 'Evening'];
-  const defaultActivities = {
-    'Morning': ['Breakfast at local cafÃ©', 'Museum visit', 'Walking tour'],
-    'Afternoon': ['Lunch', 'Sightseeing', 'Shopping'],
-    'Evening': ['Dinner', 'Sunset viewing', 'Local entertainment']
-  };
-
-  // Use destination-specific activities if available
-  const destActivities = destData?.activities || [];
-
-  for (let i = 0; i < Math.min(activityCount, timeSlots.length); i++) {
-    const slot = timeSlots[i];
-    let activityName;
-
-    if (destActivities.length > 0 && dayNum <= destActivities.length) {
-      activityName = destActivities[(dayNum - 1 + i) % destActivities.length];
-    } else {
-      activityName = defaultActivities[slot][i % defaultActivities[slot].length];
-    }
-
-    activities.push({
-      time: slot,
-      name: activityName,
-      duration: '2-3 hours',
-      type: interests[i % interests.length] || 'Sightseeing'
-    });
-  }
-
-  return activities;
-}
-
-// Initialize inline planner event listeners
-function initInlinePlannerListeners() {
-  const closeBtn = document.getElementById('closePlanner');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', closeInlinePlanner);
-  }
-
-  // Close on overlay click (click outside modal)
+function startPlanningWizard() {
+  closeModal(); // Close choice modal if open
   const overlay = document.getElementById('inlinePlannerOverlay');
-  if (overlay) {
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
-        closeInlinePlanner();
-      }
-    });
+  if (overlay) overlay.classList.remove('hidden');
+
+  // Reset Wizard State
+  wizardStep = 1;
+  state.tripPlannerState = {
+    budget: null,
+    currency: 'USD',
+    destination: '',
+    startDate: '',
+    endDate: '',
+    travelers: 1,
+    interests: [],
+    mustDos: [],
+    selectedHotel: null,
+    selectedActivities: [],
+    healthConnected: false
+  };
+
+  // Pre-fill if temp data exists
+  if (state.tempDestinations && state.tempDestinations.length > 0) {
+    state.tripPlannerState.destination = state.tempDestinations.join(', ');
   }
+
+  renderWizardSteps();
+  renderWizardStep(1);
+}
+
+function closeInlinePlanner() {
+  const overlay = document.getElementById('inlinePlannerOverlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+function enterExplorePlanningMode() {
+  closeModal();
+  state.planningMode = true;
+  state.tempDestinations = [];
+  navigateTo('explore'); // SWITCH VIEW
+  showToast('Planning Mode: Select destinations to build your trip!', 'info');
+  renderExplore();
+}
+
+function cancelPlanningMode() {
+  state.planningMode = false;
+  state.tempDestinations = [];
+  renderExplore();
 }
 
 console.log('âœ… Inline Trip Planner functions loaded');
+// Enhanced initInlinePlannerListeners with event listener wiring
 // Enhanced initInlinePlannerListeners with event listener wiring
 function initInlinePlannerListeners() {
   const closeBtn = document.getElementById('closePlanner');
@@ -2796,28 +3584,24 @@ function initInlinePlannerListeners() {
   }
 }
 
-// Replace the old init function
-console.log('âœ… Enhanced initInlinePlannerListeners with full event wiring');
-// ========== INITIALIZATION ==========
-loadData();
-updateXPBar();
-render();
-
-window.addEventListener('hashchange', () => {
-  const hash = window.location.hash.slice(1);
-  if (hash.startsWith('itinerary/')) {
-    const tripId = hash.split('/')[1];
-    navigateTo('itinerary', tripId);
-  } else {
-    navigateTo(hash || 'home');
-  }
-});
-
-// Initialize event listeners when DOM is ready
 function initializeEventListeners() {
-  console.log('🔄 Initializing event listeners...');
+  console.log('🔄 Initializing Global Event Listeners...');
 
-  // Country search
+  // 1. Planner Listeners
+  initInlinePlannerListeners();
+
+  // 2. Tab Switching Logic (Event Delegation)
+  document.body.addEventListener('click', (e) => {
+    if (e.target.matches('.tab')) {
+      const target = e.target.dataset.tab;
+      if (target) {
+        console.log('Tab Clicked via Delegation:', target);
+        switchTab(target);
+      }
+    }
+  });
+
+  // 3. Country Search
   const countrySearch = document.getElementById('countrySearch');
   if (countrySearch) {
     countrySearch.addEventListener('input', (e) => {
@@ -2828,77 +3612,49 @@ function initializeEventListeners() {
         searchCountries(query);
       }
     });
-    console.log('✅ Country search listener added');
   }
 
-  // Chat listeners
+  // 4. Chat Listeners
   const chatSend = document.getElementById('chatSend');
   const chatInput = document.getElementById('chatInput');
   if (chatSend) {
     chatSend.addEventListener('click', sendChatMessage);
-    console.log('✅ Chat send listener added');
   }
   if (chatInput) {
     chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') sendChatMessage();
     });
-    console.log('✅ Chat input listener added');
   }
 
-  // Filter listeners
-  const toggleBtn = document.getElementById('toggleFilters');
-  const applyBtn = document.getElementById('applyFilters');
-  const clearBtn = document.getElementById('clearFilters');
-
-  if (toggleBtn) {
-    // Use onclick only to avoid double-firing if listeners stack
-    toggleBtn.onclick = function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('👆 Toggle button clicked');
-      toggleFilters();
-    };
-    console.log('✅ Toggle filter listener added (onclick only)');
-  }
-  if (applyBtn) {
-    applyBtn.addEventListener('click', applyFilters);
-    console.log('✅ Apply filter listener added');
-  }
-  if (clearBtn) {
-    clearBtn.addEventListener('click', clearFilters);
-    console.log('✅ Clear filter listener added');
-  }
-
-  // Vibe tag toggles
-  const vibeTags = document.querySelectorAll('.vibe-tag');
-  vibeTags.forEach(tag => {
-    tag.addEventListener('click', function () {
-      this.classList.toggle('active');
-    });
-  });
-  if (vibeTags.length > 0) {
-    console.log(`✅ ${vibeTags.length} vibe tag listeners added`);
-  }
-
-  // Init inline planner listeners
-  if (typeof initInlinePlannerListeners === 'function') {
-    initInlinePlannerListeners();
-    console.log('✅ Inline planner listeners initialized');
-  }
-
-  // Load destinations on Explore page
-  if (window.location.hash === '#explore') {
-    renderDestinationCards(DESTINATION_DATABASE);
-    console.log('✅ Loaded destinations for Explore page');
-  }
-
-  console.log('✅ All event listeners initialized!');
+  console.log('✅ Global Event Listeners Initialized');
 }
 
-// Run initialization when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeEventListeners);
-} else {
-  // DOM already loaded, run immediately
+// ========== INITIALIZATION ==========
+// Wait for DOM to be ready
+document.addEventListener('DOMContentLoaded', () => {
+  loadData();
   initializeEventListeners();
-}
+  updateXPBar();
+
+  // Check hash on load
+  const hash = window.location.hash.slice(1);
+  if (hash.startsWith('itinerary/')) {
+    const tripId = hash.split('/')[1];
+    navigateTo('itinerary', tripId);
+  } else {
+    render(); // Default render
+  }
+});
+
+// Handle hash changes
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.slice(1);
+  if (hash.startsWith('itinerary/')) {
+    const tripId = hash.split('/')[1];
+    navigateTo('itinerary', tripId);
+  } else {
+    navigateTo(hash || 'home');
+  }
+});
+
+// End of app.js
