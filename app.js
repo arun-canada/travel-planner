@@ -1204,18 +1204,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 // ========== EDIT DESTINATION MODAL ==========
 function showEditDestinationModal(tripId, index, currentName, currentNotes) {
-  showModal('Edit Destination', 
+  showModal('Edit Destination', `
     <div class="form-group">
       <label class="form-label">Destination Name</label>
-      <input type="text" id="editDestName" class="form-input" value="" required>
+      <input type="text" id="editDestName" class="form-input" value="${currentName}" required>
     </div>
     <div class="form-group">
       <label class="form-label">Notes (optional)</label>
-      <input type="text" id="editDestNotes" class="form-input" value="">
+      <input type="text" id="editDestNotes" class="form-input" value="${currentNotes}">
     </div>
-  , [
+  `, [
     { label: 'Cancel', class: 'btn-secondary', onclick: 'closeModal()' },
-    { label: 'Save', class: 'btn-primary', onclick: submitEditDestination('', ) }
+    { label: 'Save', class: 'btn-primary', onclick: `submitEditDestination('${tripId}', ${index})` }
   ]);
 }
 
@@ -1229,3 +1229,4 @@ function submitEditDestination(tripId, index) {
   updateDestination(tripId, index, name, notes);
   closeModal();
 }
+
