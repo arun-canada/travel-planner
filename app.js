@@ -346,6 +346,15 @@ function addExpense(tripId, amount, category, description, date) {
   const trip = getTripById(tripId);
   if (!trip) return;
 
+  // Defensive: Ensure budget object exists
+  if (!trip.budget) {
+    trip.budget = { total: 0, currency: 'USD', expenses: [] };
+  }
+  // Defensive: Ensure expenses array exists
+  if (!trip.budget.expenses) {
+    trip.budget.expenses = [];
+  }
+
   trip.budget.expenses.push({
     amount: parseFloat(amount),
     category,
@@ -361,7 +370,7 @@ function addExpense(tripId, amount, category, description, date) {
 
 function deleteExpense(tripId, index) {
   const trip = getTripById(tripId);
-  if (!trip) return;
+  if (!trip || !trip.budget || !trip.budget.expenses) return;
 
   trip.budget.expenses.splice(index, 1);
   saveData();
@@ -370,18 +379,28 @@ function deleteExpense(tripId, index) {
 
 function getCategoryIcon(category) {
   const icons = {
-    'Flights': '✈️', 'Hotels': '🏨', 'Food': '🍽️',
-    'Activities': '🎭', 'Shopping': '🛍️', 'Transport': '🚗', 'Other': '📦'
+    food: '🍔', transport: '🚕', lodging: '🏨',
+    activities: '🎟️', shopping: '🛍️', flights: '✈️', other: '💸'
   };
-  return icons[category] || '📦';
+  return icons[category] || '💸';
 }
 
-// ========== PACKING LIST ==========
 function addPackingItem(tripId, category, item) {
   const trip = getTripById(tripId);
   if (!trip) return;
 
-  trip.packingList.push({ category, item: sanitizeHTML(item), checked: false });
+  if (!trip.packingList) trip.packingList = [];
+
+  const existingCategory = trip.packingList.find(c => c.category === category);
+  if (existingCategory) {
+    existingCategory.items.push({ name: item, checked: false });
+  } else {
+    trip.packingList.push({
+      category,
+      items: [{ name: item, checked: false }]
+    });
+  }
+
   saveData();
   renderPackingTab(trip);
 }
@@ -954,6 +973,11 @@ function confirmAddDestinationToTrip(destName) {
   // EXISTING TRIP LOGIC
   const trip = getTripById(tripId);
   if (trip) {
+    // Defensive: Ensure destinations array exists
+    if (!trip.destinations) {
+      trip.destinations = [];
+    }
+
     if (!trip.destinations.find(d => d.name === destName)) {
       trip.destinations.push({ name: destName, notes: notes });
       saveData();
