@@ -2692,3 +2692,162 @@ a:hover {
   padding: 4px 8px;
   border-radius: 4px;
 }
+
+/* ========== SMART SUGGESTIONS PANEL ========== */
+.suggestion-panel {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 2px solid var(--primary-alpine);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.suggestion-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.suggestion-header h4 {
+  margin: 0;
+  color: var(--primary-alpine);
+  font-size: 1.1rem;
+}
+
+.suggestion-icon {
+  font-size: 1.5rem;
+}
+
+.suggestion-body {
+  margin-bottom: var(--spacing-md);
+}
+
+.suggestion-body p {
+  margin: var(--spacing-xs) 0;
+}
+
+.health-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.health-suggestion {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+}
+
+.health-suggestion.warning {
+  background: rgba(255, 193, 7, 0.2);
+  border: 1px solid #ffc107;
+}
+
+.health-suggestion.info {
+  background: rgba(33, 150, 243, 0.15);
+  border: 1px solid #2196f3;
+}
+
+.health-suggestion.success {
+  background: rgba(76, 175, 80, 0.15);
+  border: 1px solid #4caf50;
+}
+
+.suggestion-emoji {
+  font-size: 1.2rem;
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+/* ========== EDIT DAY MODAL ========== */
+.edit-day-container {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.current-activities-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.edit-activity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: #f8f9fa;
+  border-radius: var(--radius-md);
+  border: 1px solid #eee;
+}
+
+.edit-activity-row .activity-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.edit-activity-row .activity-meta {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+  border: none;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.available-activities-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.available-activity {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: white;
+  border: 2px dashed var(--mint);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.available-activity:hover {
+  background: var(--mint);
+  border-style: solid;
+  color: white;
+}
+
+.available-activity:hover .text-muted {
+  color: rgba(255, 255, 255, 0.8);
+}

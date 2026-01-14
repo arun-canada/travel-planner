@@ -1955,51 +1955,98 @@ function showCreateTripModal() {
   launchInlinePlanner();
 }
 
+// NOTE: generateItinerary is defined earlier in the file (around line 1842)
+// The function below generates mode-aware itineraries based on current mode and health data
+
 // ==========================================
-// ITINERARY GENERATION ENGINE
+// MODE-AWARE ITINERARY GENERATION
 // ==========================================
-function generateItinerary(start, end, prefs) {
+const ACTIVITY_POOL = {
+  relaxed: [
+    { title: 'Leisurely Breakfast at Cafe', type: 'sedentary', duration: 90, cals: 50, steps: 500, temp: 22, transit: 10 },
+    { title: 'Gentle Morning Stroll', type: 'walking', duration: 60, cals: 100, steps: 2000, temp: 20, transit: 0 },
+    { title: 'Spa & Wellness Session', type: 'sedentary', duration: 120, cals: 50, steps: 200, temp: 24, transit: 15 },
+    { title: 'Scenic Lunch with View', type: 'sedentary', duration: 90, cals: 0, steps: 300, temp: 22, transit: 10 },
+    { title: 'Quiet Reading in Park', type: 'sedentary', duration: 90, cals: 20, steps: 500, temp: 21, transit: 10 },
+    { title: 'Sunset Wine Tasting', type: 'sedentary', duration: 90, cals: 30, steps: 400, temp: 19, transit: 15 },
+    { title: 'Early Dinner & Rest', type: 'sedentary', duration: 90, cals: 0, steps: 300, temp: 20, transit: 10 }
+  ],
+  balanced: [
+    { title: 'Morning Walk & Breakfast', type: 'active', duration: 90, cals: 300, steps: 4000, temp: 18, transit: 10 },
+    { title: 'City Museum Tour', type: 'walking', duration: 120, cals: 200, steps: 3000, temp: 21, transit: 20 },
+    { title: 'Local Market Exploration', type: 'walking', duration: 120, cals: 150, steps: 3000, temp: 27, transit: 15 },
+    { title: 'Relaxing Lunch', type: 'sedentary', duration: 60, cals: 0, steps: 0, temp: 22, transit: 5 },
+    { title: 'Afternoon Hike / Park', type: 'active', duration: 120, cals: 400, steps: 6000, temp: 20, transit: 30 },
+    { title: 'Sunset Viewpoint', type: 'walking', duration: 60, cals: 100, steps: 1500, temp: 19, transit: 15 },
+    { title: 'Dinner at Local Gem', type: 'sedentary', duration: 90, cals: 0, steps: 0, temp: 18, transit: 10 }
+  ],
+  intense: [
+    { title: 'Sunrise Jogging Tour', type: 'active', duration: 60, cals: 500, steps: 8000, temp: 16, transit: 0 },
+    { title: 'Mountain/Hill Hike', type: 'active', duration: 180, cals: 800, steps: 12000, temp: 18, transit: 30 },
+    { title: 'City Walking Tour (Extended)', type: 'walking', duration: 180, cals: 400, steps: 8000, temp: 22, transit: 15 },
+    { title: 'Adventure Activity (Kayak/Bike)', type: 'active', duration: 150, cals: 600, steps: 3000, temp: 24, transit: 25 },
+    { title: 'Quick Lunch Break', type: 'sedentary', duration: 45, cals: 0, steps: 0, temp: 22, transit: 5 },
+    { title: 'Evening Night Market Crawl', type: 'walking', duration: 120, cals: 250, steps: 5000, temp: 20, transit: 10 },
+    { title: 'Late Night Food Tour', type: 'walking', duration: 90, cals: 150, steps: 3000, temp: 18, transit: 15 }
+  ]
+};
+
+function generateModeAwareItinerary(trip, mode) {
+  const start = trip.startDate;
+  const end = trip.endDate;
   const startDt = new Date(start);
   const endDt = new Date(end);
   const diffTime = Math.abs(endDt - startDt);
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   const days = [];
 
-  const activities = [
-    { title: 'Morning Walk & Breakfast', type: 'active', duration: 90, cals: 300, steps: 4000 },
-    { title: 'City Museum Tour', type: 'walking', duration: 120, cals: 200, steps: 3000 },
-    { title: 'Local Market Exploration', type: 'walking', duration: 90, cals: 150, steps: 2500 },
-    { title: 'Relaxing Lunch', type: 'sedentary', duration: 60, cals: 0, steps: 0 },
-    { title: 'Afternoon Hike / Park', type: 'active', duration: 120, cals: 400, steps: 6000 },
-    { title: 'Sunset Viewpoint', type: 'walking', duration: 60, cals: 100, steps: 1500 },
-    { title: 'Dinner at Local Gem', type: 'sedentary', duration: 90, cals: 0, steps: 0 }
-  ];
+  // Select activity pool based on mode
+  let activityPool;
+  let slotsPerDay;
+
+  switch (mode) {
+    case 'Protect':
+      activityPool = ACTIVITY_POOL.relaxed;
+      slotsPerDay = 2; // Fewer activities for recovery
+      break;
+    case 'Go Big':
+      activityPool = ACTIVITY_POOL.intense;
+      slotsPerDay = 5; // Maximum activities
+      break;
+    case 'Balanced':
+    default:
+      activityPool = ACTIVITY_POOL.balanced;
+      slotsPerDay = 3; // Moderate activities
+      break;
+  }
+
+  // Consider health data if available
+  const bodyStats = trip.bodyStats || {};
+  if (bodyStats.sleep && bodyStats.sleep < 6) {
+    // Poor sleep: reduce intensity
+    slotsPerDay = Math.max(2, slotsPerDay - 1);
+  }
+  if (bodyStats.mood === 'Tired') {
+    // Tired mood: reduce intensity
+    slotsPerDay = Math.max(2, slotsPerDay - 1);
+  }
 
   for (let i = 0; i < diffDays; i++) {
     const currentDt = new Date(startDt);
     currentDt.setDate(startDt.getDate() + i);
 
-    // Distribute Must-Dos
     let dayActivities = [];
-    if (prefs.mustDos && prefs.mustDos.length > 0 && i < prefs.mustDos.length) {
-      dayActivities.push({
-        title: `Visit ${prefs.mustDos[i]}`,
-        type: 'walking',
-        duration: 120,
-        cals: 200,
-        steps: 2500,
-        isMustDo: true
-      });
-    }
 
-    // Fill remaining day based on pace
-    const slots = prefs.pace === 'packed' ? 4 : (prefs.pace === 'moderate' ? 3 : 2);
-    for (let j = 0; j < slots; j++) {
-      const randomAct = activities[Math.floor(Math.random() * activities.length)];
-      dayActivities.push({ ...randomAct });
+    // Add varied activities for the day
+    const usedIndices = new Set();
+    for (let j = 0; j < slotsPerDay; j++) {
+      let idx;
+      do {
+        idx = Math.floor(Math.random() * activityPool.length);
+      } while (usedIndices.has(idx) && usedIndices.size < activityPool.length);
+      usedIndices.add(idx);
+      dayActivities.push({ ...activityPool[idx], id: `act-${i}-${j}` });
     }
-
-    // Sort by type loosely to simulate day flow (Active -> Food -> Active)
 
     // Calculate daily stats
     const dailySteps = dayActivities.reduce((acc, act) => acc + (act.steps || 0), 0);
@@ -3393,18 +3440,61 @@ function renderItinerary(trip) {
 
   const dashboardHTML = renderHealthDashboard(trip);
 
-  const itineraryHTML = trip.itinerary.map(day => `
+  // Build suggestion panel HTML if there's a pending suggestion
+  let suggestionHTML = '';
+  if (state.pendingSuggestion && state.pendingSuggestion.tripId === trip.id) {
+    const { reason, mode } = state.pendingSuggestion;
+    const healthSuggestions = state.healthSuggestions || [];
+
+    suggestionHTML = `
+      <div class="suggestion-panel">
+        <div class="suggestion-header">
+          <span class="suggestion-icon">✨</span>
+          <h4>Smart Suggestion</h4>
+        </div>
+        <div class="suggestion-body">
+          <p><strong>${reason}</strong></p>
+          <p class="text-muted">${getModeDescription(mode)}</p>
+          ${healthSuggestions.length > 0 ? `
+            <div class="health-suggestions">
+              ${healthSuggestions.map(s => `
+                <div class="health-suggestion ${s.type}">
+                  <span class="suggestion-emoji">${s.icon}</span>
+                  <span>${s.text}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+        <div class="suggestion-actions">
+          <button class="btn btn-primary btn-sm" onclick="applyItinerarySuggestion('${trip.id}')">
+            🔄 Regenerate Itinerary
+          </button>
+          <button class="btn btn-outline btn-sm" onclick="dismissItinerarySuggestion('${trip.id}')">
+            Keep Current
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  const itineraryHTML = trip.itinerary.map((day, dayIndex) => `
     <div class="itinerary-day">
       <div class="day-header flex-between align-center">
          <div>
            <h3 class="mb-none">Day ${day.day} of ${trip.itinerary.length}</h3>
            <span class="text-muted">${day.weekday} • ${day.focus}</span>
          </div>
-         <div class="badge badge-primary">${day.healthStats.steps} steps exp.</div>
+         <div style="display: flex; gap: 0.5rem; align-items: center;">
+           <div class="badge badge-primary">${day.healthStats.steps} steps exp.</div>
+           <button class="btn btn-sm btn-outline" onclick="editDayActivities('${trip.id}', ${dayIndex})" title="Edit this day">
+             ✏️
+           </button>
+         </div>
       </div>
       
       <div class="activity-timeline">
-         ${day.activities.map(act => `
+         ${day.activities.map((act, actIndex) => `
             <div class="detailed-activity-card">
                <div class="act-header">
                   <span>${act.title}</span>
@@ -3427,6 +3517,7 @@ function renderItinerary(trip) {
   container.innerHTML = `
     <div style="font-family: 'Inter', sans-serif;">
        ${dashboardHTML}
+       ${suggestionHTML}
        ${itineraryHTML}
     </div>
   `;
@@ -3436,23 +3527,208 @@ function renderItinerary(trip) {
 window.setTripMode = function (tripId, mode) {
   const trip = state.trips.find(t => t.id === tripId);
   if (trip) {
+    const previousMode = trip.currentMode;
     trip.currentMode = mode;
-    renderItinerary(trip); // Re-render to update UI
     saveData();
+
+    // Show suggestion panel if mode changed
+    if (previousMode !== mode) {
+      showItinerarySuggestion(trip, `Mode changed to ${mode}`, getModeDescription(mode));
+    } else {
+      renderItinerary(trip); // Just re-render if no change
+    }
   }
+};
+
+function getModeDescription(mode) {
+  switch (mode) {
+    case 'Protect':
+      return 'Relaxed pace with fewer activities for recovery. ~2 activities/day.';
+    case 'Go Big':
+      return 'Maximum experiences! Pack your days with adventures. ~5 activities/day.';
+    case 'Balanced':
+    default:
+      return 'Sustainable mix of activities and rest. ~3 activities/day.';
+  }
+}
+
+function showItinerarySuggestion(trip, title, description) {
+  // Store pending suggestion state
+  state.pendingSuggestion = {
+    tripId: trip.id,
+    mode: trip.currentMode,
+    reason: title
+  };
+
+  renderItinerary(trip);
+}
+
+function getHealthSuggestions(bodyStats) {
+  const suggestions = [];
+
+  if (bodyStats.sleep && bodyStats.sleep < 6) {
+    suggestions.push({
+      type: 'warning',
+      icon: '😴',
+      text: 'Low sleep detected. Consider lighter activities today.',
+      action: 'reduce_intensity'
+    });
+  }
+
+  if (bodyStats.mood === 'Tired') {
+    suggestions.push({
+      type: 'warning',
+      icon: '😓',
+      text: 'Feeling tired? Swap high-energy activities for relaxing ones.',
+      action: 'add_rest'
+    });
+  }
+
+  if (bodyStats.restingHR && bodyStats.restingHR > 70) {
+    suggestions.push({
+      type: 'info',
+      icon: '❤️',
+      text: 'Elevated heart rate. Light activity recommended.',
+      action: 'reduce_intensity'
+    });
+  }
+
+  if (bodyStats.mood === 'Energetic' && bodyStats.sleep >= 8) {
+    suggestions.push({
+      type: 'success',
+      icon: '🚀',
+      text: 'Great energy levels! Perfect day for adventures.',
+      action: 'increase_intensity'
+    });
+  }
+
+  return suggestions;
+}
+
+window.applyItinerarySuggestion = function (tripId) {
+  const trip = state.trips.find(t => t.id === tripId);
+  if (trip) {
+    // Regenerate itinerary based on current mode and health
+    trip.itinerary = generateModeAwareItinerary(trip, trip.currentMode);
+    state.pendingSuggestion = null;
+    saveData();
+    renderItinerary(trip);
+    showToast('Itinerary updated based on your mode!', 'success');
+  }
+};
+
+window.dismissItinerarySuggestion = function (tripId) {
+  state.pendingSuggestion = null;
+  state.healthSuggestions = null;
+  const trip = state.trips.find(t => t.id === tripId);
+  if (trip) {
+    renderItinerary(trip);
+  }
+};
+
+// ========== EDIT DAY ACTIVITIES ==========
+window.editDayActivities = function (tripId, dayIndex) {
+  const trip = state.trips.find(t => t.id === tripId);
+  if (!trip || !trip.itinerary || !trip.itinerary[dayIndex]) return;
+
+  const day = trip.itinerary[dayIndex];
+  const mode = trip.currentMode || 'Balanced';
+  const activityPool = mode === 'Protect' ? ACTIVITY_POOL.relaxed :
+    mode === 'Go Big' ? ACTIVITY_POOL.intense : ACTIVITY_POOL.balanced;
+
+  const activitiesHTML = day.activities.map((act, i) => `
+    <div class="edit-activity-row" data-index="${i}">
+      <span class="activity-name">${act.title}</span>
+      <span class="activity-meta">${act.duration}min • ${act.steps} steps</span>
+      <button class="btn btn-sm btn-danger" onclick="removeActivityFromDay('${tripId}', ${dayIndex}, ${i})">✕</button>
+    </div>
+  `).join('');
+
+  const availableHTML = activityPool.map((act, i) => `
+    <div class="available-activity" onclick="addActivityToDay('${tripId}', ${dayIndex}, ${i})">
+      <span>+ ${act.title}</span>
+      <span class="text-muted text-xs">${act.duration}min</span>
+    </div>
+  `).join('');
+
+  showModal(`Edit Day ${day.day} - ${day.weekday}`, `
+    <div class="edit-day-container">
+      <h4 class="mb-md">Current Activities</h4>
+      <div class="current-activities-list">
+        ${activitiesHTML || '<p class="text-muted">No activities</p>'}
+      </div>
+      
+      <h4 class="mb-md mt-lg">Add Activities (${mode} mode)</h4>
+      <div class="available-activities-list">
+        ${availableHTML}
+      </div>
+    </div>
+  `, [
+    { label: 'Done', class: 'btn-primary', onclick: `closeModal(); renderItinerary(state.trips.find(t => t.id === '${tripId}'))` }
+  ]);
+};
+
+window.removeActivityFromDay = function (tripId, dayIndex, actIndex) {
+  const trip = state.trips.find(t => t.id === tripId);
+  if (!trip || !trip.itinerary || !trip.itinerary[dayIndex]) return;
+
+  trip.itinerary[dayIndex].activities.splice(actIndex, 1);
+
+  // Recalculate day stats
+  const day = trip.itinerary[dayIndex];
+  day.healthStats.steps = day.activities.reduce((acc, act) => acc + (act.steps || 0), 0);
+  day.healthStats.calories = day.activities.reduce((acc, act) => acc + (act.cals || 0), 0);
+
+  saveData();
+  editDayActivities(tripId, dayIndex); // Refresh modal
+  showToast('Activity removed', 'info');
+};
+
+window.addActivityToDay = function (tripId, dayIndex, poolIndex) {
+  const trip = state.trips.find(t => t.id === tripId);
+  if (!trip || !trip.itinerary || !trip.itinerary[dayIndex]) return;
+
+  const mode = trip.currentMode || 'Balanced';
+  const activityPool = mode === 'Protect' ? ACTIVITY_POOL.relaxed :
+    mode === 'Go Big' ? ACTIVITY_POOL.intense : ACTIVITY_POOL.balanced;
+
+  const newActivity = { ...activityPool[poolIndex], id: `act-${Date.now()}` };
+  trip.itinerary[dayIndex].activities.push(newActivity);
+
+  // Recalculate day stats
+  const day = trip.itinerary[dayIndex];
+  day.healthStats.steps = day.activities.reduce((acc, act) => acc + (act.steps || 0), 0);
+  day.healthStats.calories = day.activities.reduce((acc, act) => acc + (act.cals || 0), 0);
+
+  saveData();
+  editDayActivities(tripId, dayIndex); // Refresh modal
+  showToast('Activity added', 'success');
 };
 
 window.simulateBodyData = function (tripId) {
   const trip = state.trips.find(t => t.id === tripId);
   if (trip) {
     if (!trip.bodyStats) trip.bodyStats = {};
-    trip.bodyStats.sleep = Math.floor(Math.random() * 4) + 6; // 6-10
-    trip.bodyStats.restingHR = Math.floor(Math.random() * 20) + 55; // 55-75
+    trip.bodyStats.sleep = Math.floor(Math.random() * 5) + 5; // 5-10 (wider range for testing)
+    trip.bodyStats.restingHR = Math.floor(Math.random() * 25) + 55; // 55-80
     trip.bodyStats.steps = Math.floor(Math.random() * 10000);
     trip.bodyStats.mood = ['Good', 'Great', 'Tired', 'Energetic'][Math.floor(Math.random() * 4)];
-    renderItinerary(trip);
+
     saveData();
-    showToast('Body metrics updated from generic wearable', 'success');
+
+    // Check for health-based suggestions
+    const suggestions = getHealthSuggestions(trip.bodyStats);
+    if (suggestions.length > 0) {
+      state.healthSuggestions = suggestions;
+      state.pendingSuggestion = {
+        tripId: trip.id,
+        mode: trip.currentMode,
+        reason: 'Health data updated'
+      };
+    }
+
+    renderItinerary(trip);
+    showToast('Body metrics updated from wearable', 'success');
   }
 };
 
