@@ -2934,35 +2934,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyFiltersBtn = document.getElementById('applyFilters');
   if (applyFiltersBtn) {
     applyFiltersBtn.addEventListener('click', () => {
-      state.activeFilters.budget = document.getElementById('budgetFilter').value;
-      state.activeFilters.season = document.getElementById('seasonFilter').value;
-
-      const query = document.getElementById('countrySearch').value;
-      if (query) {
-        searchDestinations(query);
-      }
-
-      showToast('Filters applied', 'success');
+      applyFilters(); // Call the proper filter function
     });
   }
 
   const clearFiltersBtn = document.getElementById('clearFilters');
   if (clearFiltersBtn) {
     clearFiltersBtn.addEventListener('click', () => {
-      state.activeFilters = { budget: 'all', season: 'all', vibes: [] };
-      document.getElementById('budgetFilter').value = 'all';
-      document.getElementById('seasonFilter').value = 'all';
-
-      document.querySelectorAll('.vibe-tag').forEach(tag => {
-        tag.classList.remove('active');
-      });
-
-      const query = document.getElementById('countrySearch').value;
-      if (query) {
-        searchDestinations(query);
-      }
-
-      showToast('Filters cleared', 'info');
+      clearFilters(); // Call the proper clear function
     });
   }
 
