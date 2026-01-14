@@ -2376,7 +2376,7 @@ function renderBudgetTab(trip) {
   const percentage = total > 0 ? (spent / total) * 100 : 0;
 
   document.getElementById('budgetTab').innerHTML = `
-  < div class="card" >
+    <div class="card">
       <div class="card-header">
         <h3>Budget Overview</h3>
         ${total === 0 ? `<button class="btn btn-sm btn-primary" onclick="showSetBudgetModal('${trip.id}')">Set Budget</button>` : ''}
@@ -2423,15 +2423,15 @@ function renderBudgetTab(trip) {
           </div>
         `}
       </div>
-    </div >
+    </div>
   `;
 }
 
 function renderMapTab(trip) {
   document.getElementById('mapTab').innerHTML = `
-  < div id = "mapContainer" class="map-container" ></div >
+    <div id="mapContainer" class="map-container"></div>
     <div id="mapInfo" class="map-info"></div>
-`;
+  `;
 
   setTimeout(() => initializeMap(trip), 100);
 }
@@ -2445,7 +2445,7 @@ function renderPackingTab(trip) {
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
 
   document.getElementById('packingTab').innerHTML = `
-  < div class="card" >
+    <div class="card">
       <div class="card-header">
         <h3>Packing List</h3>
         <div style="display: flex; gap: 0.5rem;">
@@ -2496,7 +2496,7 @@ function renderPackingTab(trip) {
           </div>
         `}
       </div>
-    </div >
+    </div>
   `;
 }
 
@@ -2504,7 +2504,7 @@ function renderDocumentsTab(trip) {
   const typeIcons = { Passport: '🛂', Visa: '📋', Insurance: '🏥', Ticket: '🎫', Other: '📄' };
 
   document.getElementById('documentsTab').innerHTML = `
-  < div class="card" >
+    <div class="card">
       <div class="card-header flex-between">
         <h3>Documents <span class="badge">${trip.documents.length}</span></h3>
         <button class="btn btn-sm btn-primary" onclick="showUploadDocumentModal('${trip.id}')">+ Upload</button>
@@ -2531,7 +2531,7 @@ function renderDocumentsTab(trip) {
           </div>
         `}
       </div>
-    </div >
+    </div>
   `;
 }
 
