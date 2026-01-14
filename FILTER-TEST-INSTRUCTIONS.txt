@@ -1,0 +1,45 @@
+=== MANUAL TEST INSTRUCTIONS ===
+
+Please follow these steps to test if filters are working:
+
+STEP 1: REFRESH PAGE
+- Press Ctrl+Shift+R (hard refresh)
+- Navigate to Explore page
+- Do you see any destination cards automatically? ___________
+- How many cards do you see? ___________
+
+STEP 2: TEST BUDGET FILTER
+- Click "🔧 Filters" button
+- Select "Budget-Friendly" from the "Budget Level" dropdown
+- Click "Apply Filters"
+- Do cards disappear/change? ___________
+- How many cards now? ___________
+- Do you see a toast message saying "Showing X destination(s)"? ___________
+
+STEP 3: TEST VIBE FILTER
+- Click "Clear" button (cards should reload)
+- Click the "🏖️ Beach" vibe tag (should turn green/highlighted)
+- Click "Apply Filters"
+- Do cards change? ___________
+- How many cards now? ___________
+
+STEP 4: CONSOLE CHECK (F12 → Console tab)
+Paste this and press Enter:
+```
+console.log('DB length:', DESTINATION_DATABASE.length);
+console.log('Cards in DOM:', document.querySelectorAll('.country-card').length);
+console.log('Grid content length:', document.getElementById('countryGrid').innerHTML.length);
+```
+
+What are the 3 numbers? ___________
+
+==================================
+
+EXPECTED RESULTS:
+- Step 1: Should see 24 destination cards automatically
+- Step 2: Should see 18-20 budget destinations (Bali, Bangkok, Prague, etc.)
+- Step 3: Should see 8-10 beach destinations (Bali, Barcelona, Santorini, etc.)
+- Step 4: Should show: 41, (varies), (number > 0)
+
+IF NOTHING SHOWS:
+Check console (F12) for red error messages and tell me what they say.

@@ -943,6 +943,21 @@ a:hover {
   color: var(--primary-alpine);
 }
 
+.badge-budget {
+  background: #10b981;
+  color: white;
+}
+
+.badge-mid {
+  background: #3b82f6;
+  color: white;
+}
+
+.badge-luxury {
+  background: #a855f7;
+  color: white;
+}
+
 /* ========== EMPTY STATE ========== */
 .empty-state {
   text-align: center;
@@ -1220,6 +1235,13 @@ a:hover {
   display: flex;
   justify-content: space-between;
   margin-bottom: var(--spacing-xs);
+}
+
+.country-desc {
+  font-size: 0.875rem;
+  color: #666;
+  line-height: 1.5;
+  margin-bottom: var(--spacing-md);
 }
 
 /* ========== PROFILE STATS ========== */
@@ -2408,4 +2430,60 @@ a:hover {
     box-shadow: none;
     border: 1px solid #ddd;
   }
+}
+
+/* Filter panel styles - ADD THIS TO index.css */
+
+.filter-panel {
+  margin-bottom: var(--spacing-lg);
+}
+
+.filter-content {
+  display: block;
+  /* Ensure it is visible by default */
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: #f9f9f9;
+  border-radius: var(--radius-md);
+  border: 1px solid #e0e0e0;
+}
+
+.filter-content.hidden {
+  display: none !important;
+}
+
+.filter-group {
+  margin-bottom: var(--spacing-md);
+}
+
+.filter-group:last-child {
+  margin-bottom: 0;
+}
+
+.vibe-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.vibe-tag {
+  padding: var(--spacing-xs) var(--spacing-md);
+  border: 2px solid #ddd;
+  border-radius: var(--radius-full);
+  background: white;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-size: 0.875rem;
+}
+
+.vibe-tag:hover {
+  border-color: var(--primary-alpine);
+  background: rgba(31, 122, 90, 0.05);
+}
+
+.vibe-tag.active {
+  border-color: var(--primary-alpine);
+  background: var(--primary-alpine);
+  color: white;
 }

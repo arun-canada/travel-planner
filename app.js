@@ -620,6 +620,230 @@ function confirmAddCountryToTrip(countryName) {
   showToast(`Added ${countryName} to trip!`, 'success');
 }
 
+// ========== EXPLORE PAGE FILTERS ==========
+function toggleFilters() {
+  const filterContent = document.getElementById('filterContent');
+  filterContent.classList.toggle('hidden');
+}
+
+function applyFilters() {
+  const budgetFilter = document.getElementById('budgetFilter').value;
+  const seasonFilter = document.getElementById('seasonFilter').value;
+  const vibeButtons = document.querySelectorAll('.vibe-tag.active');
+  const selectedVibes = Array.from(vibeButtons).map(btn => btn.dataset.vibe);
+
+  // Update state
+  state.activeFilters = {
+    budget: budgetFilter,
+    season: seasonFilter,
+    vibes: selectedVibes
+  };
+
+  // Filter destinations from database
+  const filtered = DESTINATION_DATABASE.filter(dest => {
+    // Budget filter
+    if (budgetFilter !== 'all' && dest.budget !== budgetFilter) {
+      return false;
+    }
+
+    // Vibe filter (if any vibes selected, destination must match at least one)
+    if (selectedVibes.length > 0) {
+      const hasMatchingVibe = selectedVibes.some(vibe => dest.vibe.includes(vibe));
+      if (!hasMatchingVibe) return false;
+    }
+
+    // Season filter (simplified - check if destination is good in selected months)
+    if (seasonFilter !== 'all') {
+      const seasonMonths = {
+        'spring': [3, 4, 5],
+        'summer': [6, 7, 8],
+        'fall': [9, 10, 11],
+        'winter': [12, 1, 2]
+      };
+      const months = seasonMonths[seasonFilter];
+      const hasMatchingMonth = months.some(m => dest.months.includes(m));
+      if (!hasMatchingMonth) return false;
+    }
+
+    return true;
+  });
+
+  // Render filtered destinations
+  renderDestinationCards(filtered);
+  showToast(`Showing ${filtered.length} destination(s)`, 'success');
+}
+
+function clearFilters() {
+  // Reset UI
+  document.getElementById('budgetFilter').value = 'all';
+  document.getElementById('seasonFilter').value = 'all';
+  document.querySelectorAll('.vibe-tag').forEach(tag => tag.classList.remove('active'));
+
+  // Reset state
+  state.activeFilters = { budget: 'all', season: 'all', vibes: [] };
+
+  // Show all destinations
+  renderDestinationCards(DESTINATION_DATABASE);
+  showToast('Filters cleared', 'info');
+}
+
+function renderDestinationCards(destinations) {
+  const grid = document.getElementById('countryGrid');
+
+  if (destinations.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🌍</div>
+        <p class="empty-message">No destinations match your filters</p>
+        <button class="btn btn-secondary" onclick="clearFilters()">Clear Filters</button>
+      </div>
+    `;
+    return;
+  }
+
+  grid.innerHTML = destinations.slice(0, 24).map(dest => `
+    <div class="country-card">
+      <div class="country-content">
+        <h3 class="country-name">${dest.name}, ${dest.country}</h3>
+        <p class="country-desc">${dest.desc}</p>
+        <div class="country-info">
+          <div class="country-info-item">
+            <span>Budget:</span>
+            <strong class="badge badge-${dest.budget}">${dest.budget.toUpperCase()}</strong>
+          </div>
+          <div class="country-info-item">
+            <span>Vibe:</span>
+            <strong>${dest.vibe.slice(0, 2).join(', ')}</strong>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addDestinationToTrip('${dest.name}, ${dest.country}')">
+          Add to Trip
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addDestinationToTrip(destName) {
+  if (state.trips.length === 0) {
+    showToast('Create a trip first from the Home page!', 'warning');
+    return;
+  }
+
+  const tripOptions = state.trips.map(t =>
+    `<option value="${t.id}">${sanitizeHTML(t.name)}</option>`
+  ).join('');
+
+  showModal('Add to Trip', `
+    <div class="form-group">
+      <label class="form-label">Select Trip</label>
+      <select id="tripSelect" class="form-select">${tripOptions}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <input type="text" id="destNotes" class="form-input" placeholder="E.g., Visit museums">
+    </div>
+  `, [
+    { label: 'Cancel', class: 'btn-secondary', onclick: 'closeModal()' },
+    { label: 'Add', class: 'btn-primary', onclick: `confirmAddDestinationToTrip('${destName.replace(/'/g, "\\'")}')` }
+  ]);
+}
+
+// ========== EXPLORE PAGE FILTERS ==========
+// ========== EXPLORE PAGE FILTERS ==========
+// ========== EXPLORE PAGE FILTERS ==========
+function toggleFilters() {
+  console.log('🔘 toggleFilters() triggered');
+  const filterContent = document.getElementById('filterContent');
+  if (filterContent) {
+    const isHidden = filterContent.classList.contains('hidden');
+    console.log('   Current user-visible state:', isHidden ? 'HIDDEN' : 'VISIBLE');
+
+    if (isHidden) {
+      filterContent.classList.remove('hidden');
+      console.log('   ➡️ ACTION: Removed "hidden" class');
+    } else {
+      filterContent.classList.add('hidden');
+      console.log('   ➡️ ACTION: Added "hidden" class');
+    }
+  } else {
+    console.error('❌ filterContent element not found!');
+  }
+}
+
+function clearFilters() {
+  // Reset UI
+  const budget = document.getElementById('budgetFilter');
+  const season = document.getElementById('seasonFilter');
+  if (budget) budget.value = 'all';
+  if (season) season.value = 'all';
+
+  document.querySelectorAll('.vibe-tag').forEach(tag => tag.classList.remove('active'));
+
+  // Reset state
+  state.activeFilters = { budget: 'all', season: 'all', vibes: [] };
+
+  // Show all destinations
+  renderDestinationCards(DESTINATION_DATABASE);
+  showToast('Filters cleared', 'info');
+}
+
+function applyFilters() {
+  const budgetFilter = document.getElementById('budgetFilter').value;
+  const seasonFilter = document.getElementById('seasonFilter').value;
+  const vibeButtons = document.querySelectorAll('.vibe-tag.active');
+  const selectedVibes = Array.from(vibeButtons).map(btn => btn.dataset.vibe);
+
+  // Update state
+  state.activeFilters = {
+    budget: budgetFilter,
+    season: seasonFilter,
+    vibes: selectedVibes
+  };
+
+  // Filter destinations from database
+  const filtered = DESTINATION_DATABASE.filter(dest => {
+    // Budget filter
+    if (budgetFilter !== 'all' && dest.budget !== budgetFilter) {
+      return false;
+    }
+
+    // Vibe filter (if any vibes selected, destination must match at least one)
+    if (selectedVibes.length > 0) {
+      const hasMatchingVibe = selectedVibes.some(vibe => dest.vibe.includes(vibe));
+      if (!hasMatchingVibe) return false;
+    }
+
+    // Season filter
+    if (seasonFilter !== 'all') {
+      const seasonMonths = {
+        'spring': [3, 4, 5],
+        'summer': [6, 7, 8],
+        'fall': [9, 10, 11],
+        'winter': [12, 1, 2]
+      };
+      const months = seasonMonths[seasonFilter];
+      const hasMatchingMonth = months.some(m => dest.months.includes(m));
+      if (!hasMatchingMonth) return false;
+    }
+
+    return true;
+  });
+
+  // Render filtered destinations
+  renderDestinationCards(filtered);
+  showToast(`Showing ${filtered.length} destination(s)`, 'success');
+}
+
+function confirmAddDestinationToTrip(destName) {
+  const tripId = document.getElementById('tripSelect').value;
+  const notes = document.getElementById('destNotes').value;
+
+  addDestination(tripId, destName, notes);
+  closeModal();
+  showToast(`Added ${destName} to trip!`, 'success');
+}
+
 // ========== AI CHATBOT SYSTEM ==========
 function initializeChatbot() {
   state.chatHistory = [];
@@ -1381,7 +1605,13 @@ function render() {
   } else if (state.currentPage === 'itinerary' && state.currentTripId) {
     renderTripDetail(state.currentTripId);
   } else if (state.currentPage === 'explore') {
-    renderExplore();
+    document.getElementById('explorePage').classList.remove('hidden');
+    // Auto-load destinations when Explore page is displayed
+    setTimeout(() => {
+      if (document.getElementById('countryGrid').innerHTML.trim() === '') {
+        renderDestinationCards(DESTINATION_DATABASE);
+      }
+    }, 50);
   } else if (state.currentPage === 'chat') {
     renderChat();
   } else if (state.currentPage === 'planner') {
@@ -1433,40 +1663,6 @@ function searchDestinations(query) {
   if (filteredCities.length > 0) {
     renderCityResults(filteredCities);
   }
-}
-
-function applyFilters(destinations) {
-  const filters = state.activeFilters;
-
-  return destinations.filter(dest => {
-    // Budget filter
-    if (filters.budget !== 'all' && dest.budget !== filters.budget) {
-      return false;
-    }
-
-    //Season filter  
-    if (filters.season !== 'all') {
-      const seasonMonths = {
-        'spring': [3, 4, 5],
-        'summer': [6, 7, 8],
-        'fall': [9, 10, 11],
-        'winter': [12, 1, 2]
-      };
-      const months = seasonMonths[filters.season];
-      if (!dest.months.some(m => months.includes(m))) {
-        return false;
-      }
-    }
-
-    // Vibe filters
-    if (filters.vibes.length > 0) {
-      if (!filters.vibes.some(v => dest.vibe.includes(v))) {
-        return false;
-      }
-    }
-
-    return true;
-  });
 }
 
 function renderCityResults(cities) {
@@ -1522,7 +1718,7 @@ function renderHome() {
           </div>
           <div class="trip-stat">
             <span class="trip-stat-icon">💰</span>
-            <span>${trip.budget.expenses.length} expenses</span>
+            <span>${trip.expenses?.length || 0} expenses</span>
           </div>
         </div>
       </div>
@@ -2192,7 +2388,7 @@ function submitEditDestination(tripId, index) {
   closeModal();
 }
 
- 
+
 
 
 // ========== AUTOCOMPLETE SYSTEM ==========
@@ -2212,7 +2408,7 @@ function performAutocompleteSearch(query, inputId, dropdownId) {
   DESTINATION_DATABASE.forEach(dest => {
     const nameMatch = dest.name.toLowerCase().includes(lower);
     const countryMatch = dest.country.toLowerCase().includes(lower);
-    
+
     if (nameMatch || countryMatch) {
       results.push({
         type: 'city',
@@ -2232,9 +2428,9 @@ function performAutocompleteSearch(query, inputId, dropdownId) {
 
 function renderAutocomplete(results, dropdownId, inputId) {
   const dropdown = document.getElementById(dropdownId);
-  
+
   if (!dropdown) return;
-  
+
   if (results.length === 0) {
     dropdown.innerHTML = '<div class="autocomplete-empty">No destinations found</div>';
     dropdown.classList.remove('hidden');
@@ -2252,9 +2448,9 @@ function renderAutocomplete(results, dropdownId, inputId) {
       <div class="autocomplete-badge">${r.budget}</div>
     </div>
   `).join('');
-  
+
   dropdown.classList.remove('hidden');
-  
+
   // Add click handlers
   dropdown.querySelectorAll('.autocomplete-item').forEach((item, idx) => {
     item.addEventListener('click', () => selectAutocompleteItem(idx, inputId, dropdownId));
@@ -2263,17 +2459,17 @@ function renderAutocomplete(results, dropdownId, inputId) {
 
 function selectAutocompleteItem(index, inputId, dropdownId) {
   if (index < 0 || index >= autocompleteMatches.length) return;
-  
+
   const selected = autocompleteMatches[index];
   const input = document.getElementById(inputId);
-  
-  const displayText = selected.type === 'city' 
-    ? `${selected.name}, ${selected.country}` 
+
+  const displayText = selected.type === 'city'
+    ? `${selected.name}, ${selected.country}`
     : selected.name;
-  
+
   input.value = displayText;
   hideAutocomplete(dropdownId);
-  
+
   // Trigger city search
   if (inputId === 'countrySearch') {
     searchDestinations(selected.name);
@@ -2291,31 +2487,31 @@ function hideAutocomplete(dropdownId) {
 
 function handleAutocompleteKeyboard(e, inputId, dropdownId) {
   const dropdown = document.getElementById(dropdownId);
-  
+
   if (!dropdown || dropdown.classList.contains('hidden')) {
     return;
   }
 
-  switch(e.key) {
+  switch (e.key) {
     case 'ArrowDown':
       e.preventDefault();
       autocompleteSelectedIndex = Math.min(autocompleteSelectedIndex + 1, autocompleteMatches.length - 1);
       renderAutocomplete(autocompleteMatches, dropdownId, inputId);
       break;
-      
+
     case 'ArrowUp':
       e.preventDefault();
       autocompleteSelectedIndex = Math.max(autocompleteSelectedIndex - 1, -1);
       renderAutocomplete(autocompleteMatches, dropdownId, inputId);
       break;
-      
+
     case 'Enter':
       e.preventDefault();
       if (autocompleteSelectedIndex >= 0) {
         selectAutocompleteItem(autocompleteSelectedIndex, inputId, dropdownId);
       }
       break;
-      
+
     case 'Escape':
       hideAutocomplete(dropdownId);
       break;
@@ -2332,20 +2528,20 @@ function handleAutocompleteKeyboard(e, inputId, dropdownId) {
     }
     return;
   }
-  
+
   let searchTimeout;
-  
+
   searchInput.addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
       performAutocompleteSearch(e.target.value, 'countrySearch', 'searchAutocomplete');
     }, 200);
   });
-  
+
   searchInput.addEventListener('keydown', (e) => {
     handleAutocompleteKeyboard(e, 'countrySearch', 'searchAutocomplete');
   });
-  
+
   // Hide autocomplete when clicking outside
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.autocomplete-container')) {
@@ -2359,246 +2555,350 @@ function handleAutocompleteKeyboard(e, inputId, dropdownId) {
 
 // Launch the inline trip planner wizard
 function launchInlinePlanner() {
-    const overlay = document.getElementById('inlinePlannerOverlay');
-    if (!overlay) {
-        console.error('Inline planner overlay not found');
-        return;
-    }
+  const overlay = document.getElementById('inlinePlannerOverlay');
+  if (!overlay) {
+    console.error('Inline planner overlay not found');
+    return;
+  }
 
-    // Reset wizard state for new trip creation
-    wizardStep = 0;
-    state.tripPlannerState = {
-        destination: '',
-        startDate: '',
-        endDate: '',
-        travelers: 1,
-        totalBudget: 0,
-        pace: '',
-        foodStyle: '',
-        accommodation: '',
-        interests: [],
-        selectedHotel: null,
-        selectedActivities: [],
-        healthData: null
-    };
+  // Reset wizard state for new trip creation
+  wizardStep = 0;
+  state.tripPlannerState = {
+    destination: '',
+    startDate: '',
+    endDate: '',
+    travelers: 1,
+    totalBudget: 0,
+    pace: '',
+    foodStyle: '',
+    accommodation: '',
+    interests: [],
+    selectedHotel: null,
+    selectedActivities: [],
+    healthData: null
+  };
 
-    // Show overlay
-    overlay.classList.remove('hidden');
+  // Show overlay
+  overlay.classList.remove('hidden');
 
-    // Initialize wizard
-    renderWizardSteps();
-    renderWizardStep();
+  // Initialize wizard
+  renderWizardSteps();
+  renderWizardStep();
 
-    // Prevent body scroll
-    document.body.style.overflow = 'hidden';
+  // Prevent body scroll
+  document.body.style.overflow = 'hidden';
 }
 
 // Close the inline trip planner wizard
 function closeInlinePlanner() {
-    const overlay = document.getElementById('inlinePlannerOverlay');
-    if (overlay) {
-        overlay.classList.add('hidden');
-    }
+  const overlay = document.getElementById('inlinePlannerOverlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+  }
 
-    // Restore body scroll
-    document.body.style.overflow = '';
+  // Restore body scroll
+  document.body.style.overflow = '';
 
-    // Reset wizard state
-    wizardStep = 0;
+  // Reset wizard state
+  wizardStep = 0;
 }
 
 // Updated savePlannedTrip function to persist itinerary
 function savePlannedTripWithItinerary() {
-    const ps = state.tripPlannerState;
+  const ps = state.tripPlannerState;
 
-    if (!ps.destination || !ps.startDate || !ps.endDate) {
-        showToast('âš ï¸ Please complete all required fields');
-        return;
+  if (!ps.destination || !ps.startDate || !ps.endDate) {
+    showToast('âš ï¸ Please complete all required fields');
+    return;
+  }
+
+  // Generate full itinerary
+  const itinerary = generateCompleteItinerary(ps);
+
+  // Create new trip with itinerary data
+  const trip = {
+    id: generateId(),
+    name: ps.destination,
+    description: `${ps.pace || 'Custom'} pace trip to ${ps.destination}`,
+    startDate: ps.startDate,
+    endDate: ps.endDate,
+    destinations: [ps.destination],
+    expenses: [],
+    packingList: [],
+    documents: [],
+    // NEW: Itinerary data
+    itinerary: {
+      days: itinerary.days,
+      budget: {
+        total: ps.totalBudget,
+        lodging: Math.round(ps.totalBudget * 0.4),
+        activities: Math.round(ps.totalBudget * 0.25),
+        food: Math.round(ps.totalBudget * 0.25),
+        transport: Math.round(ps.totalBudget * 0.1)
+      },
+      hotelDetails: ps.selectedHotel,
+      preferences: {
+        pace: ps.pace,
+        foodStyle: ps.foodStyle,
+        accommodation: ps.accommodation,
+        interests: ps.interests
+      },
+      healthPreferences: ps.healthData
     }
+  };
 
-    // Generate full itinerary
-    const itinerary = generateCompleteItinerary(ps);
+  state.trips.push(trip);
+  saveState();
 
-    // Create new trip with itinerary data
-    const trip = {
-        id: generateId(),
-        name: ps.destination,
-        description: `${ps.pace || 'Custom'} pace trip to ${ps.destination}`,
-        startDate: ps.startDate,
-        endDate: ps.endDate,
-        destinations: [ps.destination],
-        expenses: [],
-        packingList: [],
-        documents: [],
-        // NEW: Itinerary data
-        itinerary: {
-            days: itinerary.days,
-            budget: {
-                total: ps.totalBudget,
-                lodging: Math.round(ps.totalBudget * 0.4),
-                activities: Math.round(ps.totalBudget * 0.25),
-                food: Math.round(ps.totalBudget * 0.25),
-                transport: Math.round(ps.totalBudget * 0.1)
-            },
-            hotelDetails: ps.selectedHotel,
-            preferences: {
-                pace: ps.pace,
-                foodStyle: ps.foodStyle,
-                accommodation: ps.accommodation,
-                interests: ps.interests
-            },
-            healthPreferences: ps.healthData
-        }
-    };
+  // Close inline planner
+  closeInlinePlanner();
 
-    state.trips.push(trip);
-    saveState();
+  // Navigate to trip detail
+  navigateTo('itinerary', trip.id);
 
-    // Close inline planner
-    closeInlinePlanner();
-
-    // Navigate to trip detail
-    navigateTo('itinerary', trip.id);
-
-    // Show success message
-    showToast('ðŸŽ‰ Trip created with full itinerary!');
-    addXP(100);
+  // Show success message
+  showToast('ðŸŽ‰ Trip created with full itinerary!');
+  addXP(100);
 }
 
 // Generate complete day-by-day itinerary
 function generateCompleteItinerary(plannerState) {
-    const { destination, startDate, endDate, interests, pace } = plannerState;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const dayCount = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  const { destination, startDate, endDate, interests, pace } = plannerState;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const dayCount = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
 
-    const days = [];
+  const days = [];
 
-    // Get destination-specific activities
-    const destData = DESTINATION_DATABASE.find(d =>
-        d.name.toLowerCase().includes(destination.toLowerCase()) ||
-        destination.toLowerCase().includes(d.name.toLowerCase())
-    );
+  // Get destination-specific activities
+  const destData = DESTINATION_DATABASE.find(d =>
+    d.name.toLowerCase().includes(destination.toLowerCase()) ||
+    destination.toLowerCase().includes(d.name.toLowerCase())
+  );
 
-    for (let i = 0; i < dayCount; i++) {
-        const currentDate = new Date(start);
-        currentDate.setDate(start.getDate() + i);
+  for (let i = 0; i < dayCount; i++) {
+    const currentDate = new Date(start);
+    currentDate.setDate(start.getDate() + i);
 
-        const activities = generateDayActivities(i + 1, interests, pace, destData);
+    const activities = generateDayActivities(i + 1, interests, pace, destData);
 
-        days.push({
-            dayNumber: i + 1,
-            date: currentDate.toISOString().split('T')[0],
-            activities: activities,
-            notes: ''
-        });
-    }
+    days.push({
+      dayNumber: i + 1,
+      date: currentDate.toISOString().split('T')[0],
+      activities: activities,
+      notes: ''
+    });
+  }
 
-    return { days };
+  return { days };
 }
 
 // Generate activities for a specific day
 function generateDayActivities(dayNum, interests, pace, destData) {
-    const activities = [];
-    const activityCount = pace === 'Relaxed' ? 2 : pace === 'Packed' ? 5 : 3;
+  const activities = [];
+  const activityCount = pace === 'Relaxed' ? 2 : pace === 'Packed' ? 5 : 3;
 
-    const timeSlots = ['Morning', 'Afternoon', 'Evening'];
-    const defaultActivities = {
-        'Morning': ['Breakfast at local cafÃ©', 'Museum visit', 'Walking tour'],
-        'Afternoon': ['Lunch', 'Sightseeing', 'Shopping'],
-        'Evening': ['Dinner', 'Sunset viewing', 'Local entertainment']
-    };
+  const timeSlots = ['Morning', 'Afternoon', 'Evening'];
+  const defaultActivities = {
+    'Morning': ['Breakfast at local cafÃ©', 'Museum visit', 'Walking tour'],
+    'Afternoon': ['Lunch', 'Sightseeing', 'Shopping'],
+    'Evening': ['Dinner', 'Sunset viewing', 'Local entertainment']
+  };
 
-    // Use destination-specific activities if available
-    const destActivities = destData?.activities || [];
+  // Use destination-specific activities if available
+  const destActivities = destData?.activities || [];
 
-    for (let i = 0; i < Math.min(activityCount, timeSlots.length); i++) {
-        const slot = timeSlots[i];
-        let activityName;
+  for (let i = 0; i < Math.min(activityCount, timeSlots.length); i++) {
+    const slot = timeSlots[i];
+    let activityName;
 
-        if (destActivities.length > 0 && dayNum <= destActivities.length) {
-            activityName = destActivities[(dayNum - 1 + i) % destActivities.length];
-        } else {
-            activityName = defaultActivities[slot][i % defaultActivities[slot].length];
-        }
-
-        activities.push({
-            time: slot,
-            name: activityName,
-            duration: '2-3 hours',
-            type: interests[i % interests.length] || 'Sightseeing'
-        });
+    if (destActivities.length > 0 && dayNum <= destActivities.length) {
+      activityName = destActivities[(dayNum - 1 + i) % destActivities.length];
+    } else {
+      activityName = defaultActivities[slot][i % defaultActivities[slot].length];
     }
 
-    return activities;
+    activities.push({
+      time: slot,
+      name: activityName,
+      duration: '2-3 hours',
+      type: interests[i % interests.length] || 'Sightseeing'
+    });
+  }
+
+  return activities;
 }
 
 // Initialize inline planner event listeners
 function initInlinePlannerListeners() {
-    const closeBtn = document.getElementById('closePlanner');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeInlinePlanner);
-    }
+  const closeBtn = document.getElementById('closePlanner');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeInlinePlanner);
+  }
 
-    // Close on overlay click (click outside modal)
-    const overlay = document.getElementById('inlinePlannerOverlay');
-    if (overlay) {
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                closeInlinePlanner();
-            }
-        });
-    }
+  // Close on overlay click (click outside modal)
+  const overlay = document.getElementById('inlinePlannerOverlay');
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeInlinePlanner();
+      }
+    });
+  }
 }
 
 console.log('âœ… Inline Trip Planner functions loaded');
 // Enhanced initInlinePlannerListeners with event listener wiring
 function initInlinePlannerListeners() {
-    const closeBtn = document.getElementById('closePlanner');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeInlinePlanner);
-    }
+  const closeBtn = document.getElementById('closePlanner');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeInlinePlanner);
+  }
 
-    // Close on overlay click (click outside modal)
-    const overlay = document.getElementById('inlinePlannerOverlay');
-    if (overlay) {
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                closeInlinePlanner();
-            }
-        });
-    }
+  // Close on overlay click (click outside modal)
+  const overlay = document.getElementById('inlinePlannerOverlay');
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeInlinePlanner();
+      }
+    });
+  }
 
-    // Wire up wizard navigation buttons
-    const nextBtn = document.getElementById('wizardNext');
-    const prevBtn = document.getElementById('wizardPrev');
+  // Wire up wizard navigation buttons
+  const nextBtn = document.getElementById('wizardNext');
+  const prevBtn = document.getElementById('wizardPrev');
 
-    if (nextBtn && typeof wizardNext === 'function') {
-        nextBtn.onclick = () => wizardNext();
-    }
+  if (nextBtn && typeof wizardNext === 'function') {
+    nextBtn.onclick = () => wizardNext();
+  }
 
-    if (prevBtn && typeof wizardPrev === 'function') {
-        prevBtn.onclick = () => wizardPrev();
-    }
+  if (prevBtn && typeof wizardPrev === 'function') {
+    prevBtn.onclick = () => wizardPrev();
+  }
 
-    // Wire up create trip buttons to launch inline planner
-    const createBtn1 = document.getElementById('createTripBtn');
-    const createBtn2 = document.getElementById('createTripBtn2');
+  // Wire up create trip buttons to launch inline planner
+  const createBtn1 = document.getElementById('createTripBtn');
+  const createBtn2 = document.getElementById('createTripBtn2');
 
-    if (createBtn1) {
-        createBtn1.addEventListener('click', (e) => {
-            e.preventDefault();
-            launchInlinePlanner();
-        });
-    }
+  if (createBtn1) {
+    createBtn1.addEventListener('click', (e) => {
+      e.preventDefault();
+      launchInlinePlanner();
+    });
+  }
 
-    if (createBtn2) {
-        createBtn2.addEventListener('click', (e) => {
-            e.preventDefault();
-            launchInlinePlanner();
-        });
-    }
+  if (createBtn2) {
+    createBtn2.addEventListener('click', (e) => {
+      e.preventDefault();
+      launchInlinePlanner();
+    });
+  }
 }
 
 // Replace the old init function
 console.log('âœ… Enhanced initInlinePlannerListeners with full event wiring');
+// ========== INITIALIZATION ==========
+loadData();
+updateXPBar();
+render();
+
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.slice(1);
+  if (hash.startsWith('itinerary/')) {
+    const tripId = hash.split('/')[1];
+    navigateTo('itinerary', tripId);
+  } else {
+    navigateTo(hash || 'home');
+  }
+});
+
+// Initialize event listeners when DOM is ready
+function initializeEventListeners() {
+  console.log('🔄 Initializing event listeners...');
+
+  // Country search
+  const countrySearch = document.getElementById('countrySearch');
+  if (countrySearch) {
+    countrySearch.addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      if (!query) {
+        renderDestinationCards(DESTINATION_DATABASE);
+      } else {
+        searchCountries(query);
+      }
+    });
+    console.log('✅ Country search listener added');
+  }
+
+  // Chat listeners
+  const chatSend = document.getElementById('chatSend');
+  const chatInput = document.getElementById('chatInput');
+  if (chatSend) {
+    chatSend.addEventListener('click', sendChatMessage);
+    console.log('✅ Chat send listener added');
+  }
+  if (chatInput) {
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendChatMessage();
+    });
+    console.log('✅ Chat input listener added');
+  }
+
+  // Filter listeners
+  const toggleBtn = document.getElementById('toggleFilters');
+  const applyBtn = document.getElementById('applyFilters');
+  const clearBtn = document.getElementById('clearFilters');
+
+  if (toggleBtn) {
+    // Use onclick only to avoid double-firing if listeners stack
+    toggleBtn.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('👆 Toggle button clicked');
+      toggleFilters();
+    };
+    console.log('✅ Toggle filter listener added (onclick only)');
+  }
+  if (applyBtn) {
+    applyBtn.addEventListener('click', applyFilters);
+    console.log('✅ Apply filter listener added');
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearFilters);
+    console.log('✅ Clear filter listener added');
+  }
+
+  // Vibe tag toggles
+  const vibeTags = document.querySelectorAll('.vibe-tag');
+  vibeTags.forEach(tag => {
+    tag.addEventListener('click', function () {
+      this.classList.toggle('active');
+    });
+  });
+  if (vibeTags.length > 0) {
+    console.log(`✅ ${vibeTags.length} vibe tag listeners added`);
+  }
+
+  // Init inline planner listeners
+  if (typeof initInlinePlannerListeners === 'function') {
+    initInlinePlannerListeners();
+    console.log('✅ Inline planner listeners initialized');
+  }
+
+  // Load destinations on Explore page
+  if (window.location.hash === '#explore') {
+    renderDestinationCards(DESTINATION_DATABASE);
+    console.log('✅ Loaded destinations for Explore page');
+  }
+
+  console.log('✅ All event listeners initialized!');
+}
+
+// Run initialization when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeEventListeners);
+} else {
+  // DOM already loaded, run immediately
+  initializeEventListeners();
+}
