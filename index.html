@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="TripFlow - Your ultimate travel planning companion with gamification and interactive features">
+  <meta name="theme-color" content="#1F7A5A">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="TripFlow - Travel Planning Made Fun">
+  <meta property="og:description" content="Plan your adventures with gamification, interactive maps, and smart features">
+  <meta property="og:type" content="website">
+  
+  <title>TripFlow - Travel Planning Made Fun</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  
+  <!-- Header with Navigation & XP Bar -->
+  <header class="header">
+    <div class="header-content">
+      <div class="logo">TripFlow</div>
+      
+      <nav class="nav">
+        <a href="#home" class="nav-link" data-page="home">🏠 Home</a>
+        <a href="#explore" class="nav-link" data-page="explore">🔍 Explore</a>
+        <a href="#profile" class="nav-link" data-page="profile">👤 Profile</a>
+      </nav>
+      
+      <div class="xp-bar-container" id="xpBarContainer">
+        <span class="xp-text" id="xpText">Level 1 • 0/1000 XP</span>
+        <div class="xp-bar">
+          <div class="xp-fill" id="xpFill" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+  
+  <!-- Main Content Area -->
+  <main id="app">
+    
+    <!-- HOME PAGE -->
+    <div id="homePage" class="page-container">
+      <!-- Hero Section -->
+      <section class="hero">
+        <div class="hero-content">
+          <h1 class="hero-title">Plan Your Next Adventure</h1>
+          <p class="hero-subtitle">Turn travel dreams into reality with gamification and smart planning tools</p>
+          <button class="btn btn-primary btn-lg" id="createTripBtn">✨ Create New Trip</button>
+        </div>
+      </section>
+      
+      <!-- Trips Grid -->
+      <section class="section">
+        <div class="container">
+          <div class="flex-between mb-lg">
+            <h2>My Trips</h2>
+            <button class="btn btn-primary" id="createTripBtn2">+ New Trip</button>
+          </div>
+          <div id="tripsGrid" class="grid grid-3"></div>
+        </div>
+      </section>
+    </div>
+    
+    <!-- TRIP DETAIL PAGE -->
+    <div id="tripDetailPage" class="page-container hidden">
+      <section class="section">
+        <div class="container">
+          <!-- Trip Header -->
+          <div id="tripHeader" class="mb-xl"></div>
+          
+          <!-- Tabs -->
+          <div class="tabs" id="tripTabs">
+            <button class="tab active" data-tab="overview">📋 Overview</button>
+            <button class="tab" data-tab="budget">💰 Budget</button>
+            <button class="tab" data-tab="map">🗺️ Map</button>
+            <button class="tab" data-tab="packing">🎒 Packing</button>
+            <button class="tab" data-tab="documents">📄 Documents</button>
+          </div>
+          
+          <!-- Tab Contents -->
+          <div class="tab-content active" id="overviewTab"></div>
+          <div class="tab-content" id="budgetTab"></div>
+          <div class="tab-content" id="mapTab"></div>
+          <div class="tab-content" id="packingTab"></div>
+          <div class="tab-content" id="documentsTab"></div>
+        </div>
+      </section>
+    </div>
+    
+    <!-- EXPLORE PAGE -->
+    <div id="explorePage" class="page-container hidden">
+      <section class="section">
+        <div class="container">
+          <h1 class="mb-lg">Explore Destinations</h1>
+          
+          <!-- Search Bar -->
+          <div class="form-group mb-xl">
+            <input 
+              type="text" 
+              id="countrySearch" 
+              class="form-input" 
+              placeholder="Search countries (e.g., Japan, France, Canada)..."
+            >
+          </div>
+          
+          <!-- Country Grid -->
+          <div id="countryGrid" class="country-grid"></div>
+        </div>
+      </section>
+    </div>
+    
+    <!-- PROFILE PAGE -->
+    <div id="profilePage" class="page-container hidden">
+      <section class="section">
+        <div class="container">
+          <h1 class="mb-lg">Your Travel Profile</h1>
+          
+          <!-- Level & XP Display -->
+          <div class="card card-dark mb-xl" id="profileHeader">
+            <div class="text-center">
+              <div style="font-size: 4rem; margin-bottom: 1rem;">🏆</div>
+              <h2 id="profileLevel" style="color: var(--text-light);">Level 1 Explorer</h2>
+              <p id="profileXP" style="color: var(--mint); font-size: 1.25rem; margin-top: 0.5rem;">0 / 1000 XP</p>
+            </div>
+          </div>
+          
+          <!-- Stats Grid -->
+          <h3 class="mb-md">Statistics</h3>
+          <div id="statsGrid" class="stats-grid mb-xl"></div>
+          
+          <!-- Achievements -->
+          <h3 class="mb-md">Achievements</h3>
+          <div id="achievementsGrid" class="achievement-grid"></div>
+        </div>
+      </section>
+    </div>
+    
+  </main>
+  
+  <!-- Modal Overlay -->
+  <div id="modalOverlay" class="modal-overlay hidden">
+    <div class="modal" id="modalContent"></div>
+  </div>
+  
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+  
+  <!-- Achievement Unlock Overlay -->
+  <div id="achievementOverlay" class="achievement-overlay hidden"></div>
+  
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- App JS -->
+  <script src="app.js"></script>
+  
+</body>
+</html>
