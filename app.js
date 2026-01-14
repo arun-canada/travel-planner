@@ -97,14 +97,14 @@ function awardXP(amount, reason) {
   state.profile.xp += amount;
   const oldLevel = state.profile.level;
   state.profile.level = Math.floor(state.profile.xp / 1000) + 1;
-  
+
   saveData();
   updateXPBar();
-  
+
   if (state.profile.level > oldLevel) {
     showLevelUp(state.profile.level);
   }
-  
+
   showToast(`+${amount} XP • ${reason}`, 'success');
   checkAchievements();
 }
@@ -112,7 +112,7 @@ function awardXP(amount, reason) {
 function updateXPBar() {
   const xpInLevel = state.profile.xp % 1000;
   const progress = (xpInLevel / 1000) * 100;
-  
+
   document.getElementById('xpText').textContent = `Level ${state.profile.level} • ${xpInLevel}/1000 XP`;
   document.getElementById('xpFill').style.width = `${progress}%`;
 }
@@ -123,14 +123,14 @@ function showLevelUp(level) {
 
 function unlockAchievement(achievementId) {
   if (state.profile.achievements.includes(achievementId)) return;
-  
+
   const achievement = ACHIEVEMENTS[achievementId];
   if (!achievement) return;
-  
+
   state.profile.achievements.push(achievementId);
   state.profile.xp += achievement.xp;
   saveData();
-  
+
   showAchievementUnlock(achievement);
 }
 
@@ -146,7 +146,7 @@ function showAchievementUnlock(achievement) {
     </div>
   `;
   overlay.classList.remove('hidden');
-  
+
   setTimeout(() => {
     overlay.classList.add('hidden');
     updateXPBar();
@@ -155,7 +155,7 @@ function showAchievementUnlock(achievement) {
 
 function checkAchievements() {
   const stats = state.profile.stats;
-  
+
   if (stats.totalTrips >= 1) unlockAchievement('first_adventure');
   if (stats.totalDestinations >= 10) unlockAchievement('explorer');
   if (stats.totalExpenses >= 20) unlockAchievement('budget_master');
@@ -170,9 +170,9 @@ function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  
+
   const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
-  
+
   toast.innerHTML = `
     <div class="toast-icon">${icons[type] || icons.info}</div>
     <div class="toast-content">
@@ -180,9 +180,9 @@ function showToast(message, type = 'info') {
     </div>
     <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
   `;
-  
+
   container.appendChild(toast);
-  
+
   setTimeout(() => toast.remove(), 4000);
 }
 
@@ -190,12 +190,12 @@ function showToast(message, type = 'info') {
 function showModal(title, content, actions = []) {
   const overlay = document.getElementById('modalOverlay');
   const modal = document.getElementById('modalContent');
-  
+
   let actionsHTML = '';
   actions.forEach(action => {
     actionsHTML += `<button class="btn ${action.class || 'btn-primary'}" onclick="${action.onclick}">${action.label}</button>`;
   });
-  
+
   modal.innerHTML = `
     <div class="modal-header">
       <h3 class="modal-title">${sanitizeHTML(title)}</h3>
@@ -204,7 +204,7 @@ function showModal(title, content, actions = []) {
     <div class="modal-body">${content}</div>
     ${actionsHTML ? `<div class="modal-footer">${actionsHTML}</div>` : ''}
   `;
-  
+
   overlay.classList.remove('hidden');
 }
 
@@ -225,11 +225,11 @@ function createTrip(name, description, startDate, endDate) {
     packingList: [],
     documents: []
   };
-  
+
   state.trips.push(trip);
   state.profile.stats.totalTrips++;
   saveData();
-  
+
   awardXP(50, 'Created a trip');
   closeModal();
   navigateTo('home');
@@ -237,7 +237,7 @@ function createTrip(name, description, startDate, endDate) {
 
 function deleteTrip(tripId) {
   if (!confirm('Are you sure you want to delete this trip?')) return;
-  
+
   state.trips = state.trips.filter(t => t.id !== tripId);
   saveData();
   showToast('Trip deleted', 'info');
@@ -252,13 +252,13 @@ function getTripById(id) {
 function addDestination(tripId, name, notes = '') {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   trip.destinations.push({ name: sanitizeHTML(name), notes: sanitizeHTML(notes) });
   state.profile.stats.totalDestinations++;
-  
+
   const uniqueCountries = new Set(state.trips.flatMap(t => t.destinations.map(d => d.name.toLowerCase())));
   state.profile.stats.countriesVisited = uniqueCountries.size;
-  
+
   saveData();
   awardXP(20, 'Added destination');
   renderTripDetail(tripId);
@@ -266,13 +266,27 @@ function addDestination(tripId, name, notes = '') {
 
 function deleteDestination(tripId, index) {
   if (!confirm('Remove this destination?')) return;
-  
+
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   trip.destinations.splice(index, 1);
   saveData();
   showToast('Destination removed', 'info');
+  renderTripDetail(tripId);
+}
+
+function updateDestination(tripId, index, name, notes) {
+  const trip = getTripById(tripId);
+  if (!trip) return;
+
+  trip.destinations[index] = {
+    name: sanitizeHTML(name),
+    notes: sanitizeHTML(notes)
+  };
+
+  saveData();
+  showToast('Destination updated', 'success');
   renderTripDetail(tripId);
 }
 
@@ -280,7 +294,7 @@ function deleteDestination(tripId, index) {
 function setBudget(tripId, total, currency) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   trip.budget.total = parseFloat(total);
   trip.budget.currency = currency;
   saveData();
@@ -291,14 +305,14 @@ function setBudget(tripId, total, currency) {
 function addExpense(tripId, amount, category, description, date) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   trip.budget.expenses.push({
     amount: parseFloat(amount),
     category,
     description: sanitizeHTML(description),
     date
   });
-  
+
   state.profile.stats.totalExpenses++;
   saveData();
   awardXP(10, 'Added expense');
@@ -308,7 +322,7 @@ function addExpense(tripId, amount, category, description, date) {
 function deleteExpense(tripId, index) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   trip.budget.expenses.splice(index, 1);
   saveData();
   renderBudgetTab(trip);
@@ -326,7 +340,7 @@ function getCategoryIcon(category) {
 function addPackingItem(tripId, category, item) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   trip.packingList.push({ category, item: sanitizeHTML(item), checked: false });
   saveData();
   renderPackingTab(trip);
@@ -335,15 +349,15 @@ function addPackingItem(tripId, category, item) {
 function togglePackingItem(tripId, index) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   trip.packingList[index].checked = !trip.packingList[index].checked;
-  
+
   const allChecked = trip.packingList.every(item => item.checked);
   if (allChecked && trip.packingList.length > 0) {
     state.profile.stats.packingListsCompleted++;
     awardXP(30, 'Completed packing list');
   }
-  
+
   saveData();
   renderPackingTab(trip);
 }
@@ -351,7 +365,7 @@ function togglePackingItem(tripId, index) {
 function deletePackingItem(tripId, index) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   trip.packingList.splice(index, 1);
   saveData();
   renderPackingTab(trip);
@@ -360,7 +374,7 @@ function deletePackingItem(tripId, index) {
 function addSmartSuggestions(tripId) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   const suggestions = [
     { category: 'Documents', item: 'Passport' },
     { category: 'Documents', item: 'Travel Insurance' },
@@ -372,13 +386,13 @@ function addSmartSuggestions(tripId) {
     { category: 'Electronics', item: 'Phone Charger' },
     { category: 'Electronics', item: 'Power Bank' }
   ];
-  
+
   suggestions.forEach(s => {
     if (!trip.packingList.find(item => item.item === s.item)) {
       trip.packingList.push({ ...s, checked: false });
     }
   });
-  
+
   saveData();
   showToast('Added smart suggestions', 'success');
   renderPackingTab(trip);
@@ -388,12 +402,12 @@ function addSmartSuggestions(tripId) {
 function uploadDocument(tripId, file, type) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   if (file.size > 2 * 1024 * 1024) {
     showToast('File too large. Max 2MB', 'error');
     return;
   }
-  
+
   const reader = new FileReader();
   reader.onload = (e) => {
     trip.documents.push({
@@ -403,7 +417,7 @@ function uploadDocument(tripId, file, type) {
       size: file.size,
       uploadDate: new Date().toISOString()
     });
-    
+
     state.profile.stats.documentsUploaded++;
     saveData();
     awardXP(15, 'Uploaded document');
@@ -422,7 +436,7 @@ function downloadDocument(doc) {
 function deleteDocument(tripId, index) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   trip.documents.splice(index, 1);
   saveData();
   renderDocumentsTab(trip);
@@ -434,20 +448,20 @@ let mapInstance = null;
 function initializeMap(trip) {
   const container = document.getElementById('mapContainer');
   if (!container) return;
-  
+
   if (mapInstance) {
     mapInstance.remove();
   }
-  
+
   mapInstance = L.map('mapContainer').setView([20, 0], 2);
-  
+
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
   }).addTo(mapInstance);
-  
+
   const markers = [];
   const coords = [];
-  
+
   trip.destinations.forEach(dest => {
     const coord = CITY_COORDS[dest.name.toLowerCase()];
     if (coord) {
@@ -457,46 +471,46 @@ function initializeMap(trip) {
       markers.push(marker);
     }
   });
-  
+
   if (coords.length > 1) {
     L.polyline(coords, { color: '#1F7A5A', weight: 2 }).addTo(mapInstance);
   }
-  
+
   if (coords.length > 0) {
     mapInstance.fitBounds(coords);
   }
-  
+
   setTimeout(() => mapInstance.invalidateSize(), 100);
-  
+
   const mapped = coords.length;
   const total = trip.destinations.length;
-  document.getElementById('mapInfo').textContent = 
+  document.getElementById('mapInfo').textContent =
     `Showing ${mapped} of ${total} destinations on map`;
 }
 
 // ========== REST COUNTRIES API ==========
 async function searchCountries(query) {
   if (!query) {
-    document.getElementById('countryGrid').innerHTML = 
+    document.getElementById('countryGrid').innerHTML =
       '<div class="empty-state"><div class="empty-icon">🌍</div><p class="empty-message">Search for countries to explore destinations</p></div>';
     return;
   }
-  
+
   try {
     const response = await fetch(`https://restcountries.com/v3.1/name/${encodeURIComponent(query)}`);
     if (!response.ok) throw new Error('Not found');
-    
+
     const countries = await response.json();
     renderCountryCards(countries.slice(0, 12));
   } catch (e) {
-    document.getElementById('countryGrid').innerHTML = 
+    document.getElementById('countryGrid').innerHTML =
       '<div class="empty-state"><div class="empty-icon">😕</div><p class="empty-message">No countries found</p></div>';
   }
 }
 
 function renderCountryCards(countries) {
   const grid = document.getElementById('countryGrid');
-  
+
   grid.innerHTML = countries.map(country => `
     <div class="country-card">
       <img src="${country.flags.png}" alt="${country.name.common}" class="country-flag">
@@ -529,11 +543,11 @@ function addCountryToTrip(countryName) {
     showToast('Create a trip first!', 'warning');
     return;
   }
-  
-  const tripOptions = state.trips.map(t => 
+
+  const tripOptions = state.trips.map(t =>
     `<option value="${t.id}">${sanitizeHTML(t.name)}</option>`
   ).join('');
-  
+
   showModal('Add to Trip', `
     <div class="form-group">
       <label class="form-label">Select Trip</label>
@@ -552,7 +566,7 @@ function addCountryToTrip(countryName) {
 function confirmAddCountryToTrip(countryName) {
   const tripId = document.getElementById('tripSelect').value;
   const notes = document.getElementById('destNotes').value;
-  
+
   addDestination(tripId, countryName, notes);
   closeModal();
   showToast(`Added ${countryName} to trip!`, 'success');
@@ -561,27 +575,27 @@ function confirmAddCountryToTrip(countryName) {
 // ========== ROUTING ==========
 function navigateTo(page, param = null) {
   state.currentPage = page;
-  
+
   if (page === 'itinerary' && param) {
     state.currentTripId = param;
     window.location.hash = `itinerary/${param}`;
   } else {
     window.location.hash = page;
   }
-  
+
   render();
 }
 
 function handleRouteChange() {
   const hash = window.location.hash.slice(1) || 'home';
   const parts = hash.split('/');
-  
+
   state.currentPage = parts[0];
-  
+
   if (parts[0] === 'itinerary' && parts[1]) {
     state.currentTripId = parts[1];
   }
-  
+
   render();
 }
 
@@ -591,7 +605,7 @@ function render() {
   document.querySelectorAll('.nav-link').forEach(link => {
     link.classList.toggle('active', link.dataset.page === state.currentPage);
   });
-  
+
   if (state.currentPage === 'home') {
     renderHome();
   } else if (state.currentPage === 'itinerary' && state.currentTripId) {
@@ -601,14 +615,14 @@ function render() {
   } else if (state.currentPage === 'profile') {
     renderProfile();
   }
-  
+
   updateXPBar();
 }
 
 function renderHome() {
   document.getElementById('homePage').classList.remove('hidden');
   const grid = document.getElementById('tripsGrid');
-  
+
   if (state.trips.length === 0) {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column: 1 / -1;">
@@ -620,7 +634,7 @@ function renderHome() {
     `;
     return;
   }
-  
+
   grid.innerHTML = state.trips.map(trip => `
     <div class="card trip-card">
       <div class="card-header">
@@ -654,9 +668,9 @@ function renderTripDetail(tripId) {
     navigateTo('home');
     return;
   }
-  
+
   document.getElementById('tripDetailPage').classList.remove('hidden');
-  
+
   document.getElementById('tripHeader').innerHTML = `
     <div class="card card-dark">
       <h1 style="color: var(--text-light); margin-bottom: 1rem;">${sanitizeHTML(trip.name)}</h1>
@@ -668,7 +682,7 @@ function renderTripDetail(tripId) {
       </div>
     </div>
   `;
-  
+
   renderOverviewTab(trip);
 }
 
@@ -694,7 +708,8 @@ function renderOverviewTab(trip) {
                   ${dest.notes ? `<div class="destination-notes">${sanitizeHTML(dest.notes)}</div>` : ''}
                 </div>
                 <div class="destination-actions">
-                  <button class="btn btn-sm btn-icon btn-danger" onclick="deleteDestination('${trip.id}', ${i})">🗑️</button>
+                  <button class="btn btn-sm btn-icon btn-outline" onclick="showEditDestinationModal('${trip.id}', ${i}, '${sanitizeHTML(dest.name).replace(/'/g, "\\'")}', '${sanitizeHTML(dest.notes).replace(/'/g, "\\'")}')" title="Edit">✏️</button>
+                  <button class="btn btn-sm btn-icon btn-danger" onclick="deleteDestination('${trip.id}', ${i})" title="Delete">🗑️</button>
                 </div>
               </div>
             `).join('')}
@@ -710,7 +725,7 @@ function renderBudgetTab(trip) {
   const spent = trip.budget.expenses.reduce((sum, e) => sum + e.amount, 0);
   const remaining = total - spent;
   const percentage = total > 0 ? (spent / total) * 100 : 0;
-  
+
   document.getElementById('budgetTab').innerHTML = `
     <div class="card">
       <div class="card-header">
@@ -768,18 +783,18 @@ function renderMapTab(trip) {
     <div id="mapContainer" class="map-container"></div>
     <div id="mapInfo" class="map-info"></div>
   `;
-  
+
   setTimeout(() => initializeMap(trip), 100);
 }
 
 function renderPackingTab(trip) {
   const categories = ['Documents', 'Clothing', 'Toiletries', 'Electronics', 'Other'];
   const categoryIcons = { Documents: '📄', Clothing: '👕', Toiletries: '🧴', Electronics: '🔌', Other: '📦' };
-  
+
   const totalItems = trip.packingList.length;
   const checkedItems = trip.packingList.filter(item => item.checked).length;
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
-  
+
   document.getElementById('packingTab').innerHTML = `
     <div class="card">
       <div class="card-header">
@@ -807,16 +822,16 @@ function renderPackingTab(trip) {
         ` : `
           <div class="packing-list">
             ${categories.map(cat => {
-              const items = trip.packingList.filter(item => item.category === cat);
-              if (items.length === 0) return '';
-              
-              return `
+    const items = trip.packingList.filter(item => item.category === cat);
+    if (items.length === 0) return '';
+
+    return `
                 <div class="packing-category">
                   <div class="packing-category-title">${categoryIcons[cat]} ${cat}</div>
                   <div class="packing-items">
                     ${items.map((item, i) => {
-                      const globalIndex = trip.packingList.indexOf(item);
-                      return `
+      const globalIndex = trip.packingList.indexOf(item);
+      return `
                         <div class="packing-item ${item.checked ? 'checked' : ''}">
                           <input type="checkbox" class="packing-checkbox" ${item.checked ? 'checked' : ''} 
                             onchange="togglePackingItem('${trip.id}', ${globalIndex})">
@@ -824,11 +839,11 @@ function renderPackingTab(trip) {
                           <button class="btn btn-sm btn-icon btn-danger" onclick="deletePackingItem('${trip.id}', ${globalIndex})">🗑️</button>
                         </div>
                       `;
-                    }).join('')}
+    }).join('')}
                   </div>
                 </div>
               `;
-            }).join('')}
+  }).join('')}
           </div>
         `}
       </div>
@@ -838,7 +853,7 @@ function renderPackingTab(trip) {
 
 function renderDocumentsTab(trip) {
   const typeIcons = { Passport: '🛂', Visa: '📋', Insurance: '🏥', Ticket: '🎫', Other: '📄' };
-  
+
   document.getElementById('documentsTab').innerHTML = `
     <div class="card">
       <div class="card-header flex-between">
@@ -878,13 +893,13 @@ function renderExplore() {
 
 function renderProfile() {
   document.getElementById('profilePage').classList.remove('hidden');
-  
+
   const level = state.profile.level;
   const xpInLevel = state.profile.xp % 1000;
-  
+
   document.getElementById('profileLevel').textContent = `Level ${level} Explorer`;
   document.getElementById('profileXP').textContent = `${xpInLevel} / 1000 XP`;
-  
+
   const stats = state.profile.stats;
   document.getElementById('statsGrid').innerHTML = `
     <div class="stat-card"><div class="stat-value">${stats.totalTrips}</div><div class="stat-label">Total Trips</div></div>
@@ -892,7 +907,7 @@ function renderProfile() {
     <div class="stat-card"><div class="stat-value">${stats.countriesVisited}</div><div class="stat-label">Countries</div></div>
     <div class="stat-card"><div class="stat-value">${stats.totalExpenses}</div><div class="stat-label">Expenses Tracked</div></div>
   `;
-  
+
   const achievementsHTML = Object.values(ACHIEVEMENTS).map(ach => {
     const unlocked = state.profile.achievements.includes(ach.id);
     return `
@@ -904,7 +919,7 @@ function renderProfile() {
       </div>
     `;
   }).join('');
-  
+
   document.getElementById('achievementsGrid').innerHTML = achievementsHTML;
 }
 
@@ -938,12 +953,12 @@ function submitCreateTrip() {
   const desc = document.getElementById('tripDesc').value.trim();
   const start = document.getElementById('tripStart').value;
   const end = document.getElementById('tripEnd').value;
-  
+
   if (!name || !start || !end) {
     showToast('Please fill required fields', 'error');
     return;
   }
-  
+
   createTrip(name, desc, start, end);
 }
 
@@ -966,12 +981,12 @@ function showAddDestinationModal(tripId) {
 function submitAddDestination(tripId) {
   const name = document.getElementById('destName').value.trim();
   const notes = document.getElementById('destNotes').value.trim();
-  
+
   if (!name) {
     showToast('Enter destination name', 'error');
     return;
   }
-  
+
   addDestination(tripId, name, notes);
   closeModal();
 }
@@ -997,12 +1012,12 @@ function showSetBudgetModal(tripId) {
 function submitSetBudget(tripId) {
   const amount = document.getElementById('budgetAmount').value;
   const currency = document.getElementById('budgetCurrency').value;
-  
+
   if (!amount || amount <= 0) {
     showToast('Enter valid amount', 'error');
     return;
   }
-  
+
   setBudget(tripId, amount, currency);
   closeModal();
 }
@@ -1039,12 +1054,12 @@ function submitAddExpense(tripId) {
   const category = document.getElementById('expCategory').value;
   const desc = document.getElementById('expDesc').value.trim();
   const date = document.getElementById('expDate').value;
-  
+
   if (!amount || !desc || !date) {
     showToast('Fill all fields', 'error');
     return;
   }
-  
+
   addExpense(tripId, amount, category, desc, date);
   closeModal();
 }
@@ -1071,12 +1086,12 @@ function showAddPackingItemModal(tripId) {
 function submitAddPackingItem(tripId) {
   const category = document.getElementById('packCategory').value;
   const item = document.getElementById('packItem').value.trim();
-  
+
   if (!item) {
     showToast('Enter item name', 'error');
     return;
   }
-  
+
   addPackingItem(tripId, category, item);
   closeModal();
 }
@@ -1103,12 +1118,12 @@ function showUploadDocumentModal(tripId) {
 function submitUploadDocument(tripId) {
   const type = document.getElementById('docType').value;
   const file = document.getElementById('docFile').files[0];
-  
+
   if (!file) {
     showToast('Select a file', 'error');
     return;
   }
-  
+
   uploadDocument(tripId, file, type);
   closeModal();
 }
@@ -1116,11 +1131,11 @@ function submitUploadDocument(tripId) {
 function shareTrip(tripId) {
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   const text = `Check out my trip: ${trip.name}!`;
-  
+
   if (navigator.share) {
-    navigator.share({ title: trip.name, text }).catch(() => {});
+    navigator.share({ title: trip.name, text }).catch(() => { });
   } else {
     navigator.clipboard.writeText(text);
     showToast('Trip info copied to clipboard!', 'success');
@@ -1130,18 +1145,18 @@ function shareTrip(tripId) {
 // ========== TAB SWITCHING ==========
 function switchTab(tripId, tabName) {
   state.currentTab = tabName;
-  
+
   document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.tab === tabName);
   });
-  
+
   document.querySelectorAll('.tab-content').forEach(content => {
     content.classList.remove('active');
   });
-  
+
   const trip = getTripById(tripId);
   if (!trip) return;
-  
+
   if (tabName === 'overview') {
     document.getElementById('overviewTab').classList.add('active');
     renderOverviewTab(trip);
@@ -1163,27 +1178,54 @@ function switchTab(tripId, tabName) {
 // ========== INITIALIZATION ==========
 document.addEventListener('DOMContentLoaded', () => {
   loadData();
-  
+
   window.addEventListener('hashchange', handleRouteChange);
-  
+
   document.getElementById('createTripBtn').addEventListener('click', showCreateTripModal);
   document.getElementById('createTripBtn2').addEventListener('click', showCreateTripModal);
-  
+
   document.getElementById('tripTabs').addEventListener('click', (e) => {
     if (e.target.classList.contains('tab')) {
       switchTab(state.currentTripId, e.target.dataset.tab);
     }
   });
-  
+
   let searchTimeout;
   document.getElementById('countrySearch').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => searchCountries(e.target.value), 500);
   });
-  
+
   document.getElementById('modalOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'modalOverlay') closeModal();
   });
-  
+
   handleRouteChange();
 });
+// ========== EDIT DESTINATION MODAL ==========
+function showEditDestinationModal(tripId, index, currentName, currentNotes) {
+  showModal('Edit Destination', 
+    <div class="form-group">
+      <label class="form-label">Destination Name</label>
+      <input type="text" id="editDestName" class="form-input" value="" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <input type="text" id="editDestNotes" class="form-input" value="">
+    </div>
+  , [
+    { label: 'Cancel', class: 'btn-secondary', onclick: 'closeModal()' },
+    { label: 'Save', class: 'btn-primary', onclick: submitEditDestination('', ) }
+  ]);
+}
+
+function submitEditDestination(tripId, index) {
+  const name = document.getElementById('editDestName').value.trim();
+  const notes = document.getElementById('editDestNotes').value.trim();
+  if (!name) {
+    showToast('Enter destination name', 'error');
+    return;
+  }
+  updateDestination(tripId, index, name, notes);
+  closeModal();
+}
