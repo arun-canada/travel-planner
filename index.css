@@ -2005,8 +2005,34 @@ a:hover {
   font-weight: 600;
 }
 
-.preference-option:hover {
+/* White text for preference-option buttons INSIDE dark containers */
+.preference-question .preference-option {
+  color: var(--text-light);
+}
+
+.preference-question .preference-option small {
+  display: block;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 400;
+  margin-top: var(--spacing-xs);
+}
+
+.preference-question .preference-option:hover {
   background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Interests section (light background) */
+.interest-tags .preference-option,
+.wizard-content>.preference-options .preference-option {
+  background: white;
+  border-color: #eee;
+  color: var(--text-dark);
+}
+
+.interest-tags .preference-option:hover,
+.wizard-content>.preference-options .preference-option:hover {
+  border-color: var(--mint);
   transform: translateY(-2px);
 }
 
@@ -2014,6 +2040,7 @@ a:hover {
   background: var(--gradient-summit);
   border-color: var(--mint);
   box-shadow: var(--shadow-md);
+  color: white;
 }
 
 .budget-breakdown {
