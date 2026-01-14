@@ -1,42 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="TripFlow - Your ultimate travel planning companion with gamification and interactive features">
+  <meta name="description"
+    content="TripFlow - Your ultimate travel planning companion with gamification and interactive features">
   <meta name="theme-color" content="#1F7A5A">
-  
+
   <!-- Open Graph -->
   <meta property="og:title" content="TripFlow - Travel Planning Made Fun">
-  <meta property="og:description" content="Plan your adventures with gamification, interactive maps, and smart features">
+  <meta property="og:description"
+    content="Plan your adventures with gamification, interactive maps, and smart features">
   <meta property="og:type" content="website">
-  
+
   <title>TripFlow - Travel Planning Made Fun</title>
-  
+
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
-  
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800;900&display=swap"
+    rel="stylesheet">
+
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  
+
   <!-- Custom CSS -->
   <link rel="stylesheet" href="index.css">
 </head>
+
 <body>
-  
+
   <!-- Header with Navigation & XP Bar -->
   <header class="header">
     <div class="header-content">
       <div class="logo">TripFlow</div>
-      
+
       <nav class="nav">
         <a href="#home" class="nav-link" data-page="home">🏠 Home</a>
         <a href="#explore" class="nav-link" data-page="explore">🔍 Explore</a>
+        <a href="#chat" class="nav-link" data-page="chat">🤖 AI Assistant</a>
+        <a href="#planner" class="nav-link" data-page="planner">📝 Plan Trip</a>
         <a href="#profile" class="nav-link" data-page="profile">👤 Profile</a>
       </nav>
-      
+
       <div class="xp-bar-container" id="xpBarContainer">
         <span class="xp-text" id="xpText">Level 1 • 0/1000 XP</span>
         <div class="xp-bar">
@@ -45,10 +53,10 @@
       </div>
     </div>
   </header>
-  
+
   <!-- Main Content Area -->
   <main id="app">
-    
+
     <!-- HOME PAGE -->
     <div id="homePage" class="page-container">
       <!-- Hero Section -->
@@ -59,7 +67,7 @@
           <button class="btn btn-primary btn-lg" id="createTripBtn">✨ Create New Trip</button>
         </div>
       </section>
-      
+
       <!-- Trips Grid -->
       <section class="section">
         <div class="container">
@@ -71,14 +79,14 @@
         </div>
       </section>
     </div>
-    
+
     <!-- TRIP DETAIL PAGE -->
     <div id="tripDetailPage" class="page-container hidden">
       <section class="section">
         <div class="container">
           <!-- Trip Header -->
           <div id="tripHeader" class="mb-xl"></div>
-          
+
           <!-- Tabs -->
           <div class="tabs" id="tripTabs">
             <button class="tab active" data-tab="overview">📋 Overview</button>
@@ -87,7 +95,7 @@
             <button class="tab" data-tab="packing">🎒 Packing</button>
             <button class="tab" data-tab="documents">📄 Documents</button>
           </div>
-          
+
           <!-- Tab Contents -->
           <div class="tab-content active" id="overviewTab"></div>
           <div class="tab-content" id="budgetTab"></div>
@@ -97,35 +105,71 @@
         </div>
       </section>
     </div>
-    
+
     <!-- EXPLORE PAGE -->
     <div id="explorePage" class="page-container hidden">
       <section class="section">
         <div class="container">
           <h1 class="mb-lg">Explore Destinations</h1>
-          
+
+          <!-- Search Bar -->
+          <!-- Filter Panel -->
+          <div class="filter-panel mb-lg" id="filterPanel">
+            <button class="btn btn-sm btn-outline" id="toggleFilters">🔧 Filters</button>
+            <div class="filter-content hidden" id="filterContent">
+              <div class="filter-group">
+                <label class="form-label">Budget Level</label>
+                <select id="budgetFilter" class="form-select">
+                  <option value="all">All Budgets</option>
+                  <option value="budget">Budget-Friendly</option>
+                  <option value="mid">Mid-Range</option>
+                  <option value="luxury">Luxury</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label class="form-label">Best Season</label>
+                <select id="seasonFilter" class="form-select">
+                  <option value="all">Any Time</option>
+                  <option value="spring">Spring (Mar-May)</option>
+                  <option value="summer">Summer (Jun-Aug)</option>
+                  <option value="fall">Fall (Sep-Nov)</option>
+                  <option value="winter">Winter (Dec-Feb)</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label class="form-label">Vibe</label>
+                <div id="vibeFilters" class="vibe-tags">
+                  <button class="vibe-tag" data-vibe="beach">🏖️ Beach</button>
+                  <button class="vibe-tag" data-vibe="cultural">🏛️ Cultural</button>
+                  <button class="vibe-tag" data-vibe="adventure">🏔️ Adventure</button>
+                  <button class="vibe-tag" data-vibe="nightlife">🎉 Nightlife</button>
+                  <button class="vibe-tag" data-vibe="relaxing">🧘 Relaxing</button>
+                  <button class="vibe-tag" data-vibe="luxury">💎 Luxury</button>
+                </div>
+              </div>
+              <button class="btn btn-sm btn-primary" id="applyFilters">Apply Filters</button>
+              <button class="btn btn-sm btn-secondary" id="clearFilters">Clear</button>
+            </div>
+          </div>
+
           <!-- Search Bar -->
           <div class="form-group mb-xl">
-            <input 
-              type="text" 
-              id="countrySearch" 
-              class="form-input" 
-              placeholder="Search countries (e.g., Japan, France, Canada)..."
-            >
+            <input type="text" id="countrySearch" class="form-input"
+              placeholder="Search countries or cities (e.g., Paris, Japan, Barcelona)...">
           </div>
-          
+
           <!-- Country Grid -->
           <div id="countryGrid" class="country-grid"></div>
         </div>
       </section>
     </div>
-    
+
     <!-- PROFILE PAGE -->
     <div id="profilePage" class="page-container hidden">
       <section class="section">
         <div class="container">
           <h1 class="mb-lg">Your Travel Profile</h1>
-          
+
           <!-- Level & XP Display -->
           <div class="card card-dark mb-xl" id="profileHeader">
             <div class="text-center">
@@ -134,36 +178,70 @@
               <p id="profileXP" style="color: var(--mint); font-size: 1.25rem; margin-top: 0.5rem;">0 / 1000 XP</p>
             </div>
           </div>
-          
+
           <!-- Stats Grid -->
           <h3 class="mb-md">Statistics</h3>
           <div id="statsGrid" class="stats-grid mb-xl"></div>
-          
+
           <!-- Achievements -->
           <h3 class="mb-md">Achievements</h3>
           <div id="achievementsGrid" class="achievement-grid"></div>
         </div>
       </section>
     </div>
-    
+
+    <!-- AI ASSISTANT CHAT PAGE -->
+    <div id="chatPage" class="page-container hidden">
+      <section class="section">
+        <div class="container">
+          <h1 class="mb-lg">🤖 AI Travel Assistant</h1>
+          <div class="chat-container">
+            <div id="chatMessages" class="chat-messages"></div>
+            <div class="chat-input-container">
+              <input type="text" id="chatInput" class="form-input" placeholder="Tell me about your dream trip..." />
+              <button id="chatSend" class="btn btn-primary">Send</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- TRIP PLANNER WIZARD PAGE -->
+    <div id="plannerPage" class="page-container hidden">
+      <section class="section">
+        <div class="container">
+          <h1 class="mb-lg">📝 Smart Trip Planner</h1>
+          <div class="wizard-container">
+            <div class="wizard-steps" id="wizardSteps"></div>
+            <div id="wizardContent" class="wizard-content"></div>
+            <div class="wizard-navigation">
+              <button id="wizardPrev" class="btn btn-secondary">← Back</button>
+              <button id="wizardNext" class="btn btn-primary">Next →</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
   </main>
-  
+
   <!-- Modal Overlay -->
   <div id="modalOverlay" class="modal-overlay hidden">
     <div class="modal" id="modalContent"></div>
   </div>
-  
+
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
-  
+
   <!-- Achievement Unlock Overlay -->
   <div id="achievementOverlay" class="achievement-overlay hidden"></div>
-  
+
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  
+
   <!-- App JS -->
   <script src="app.js"></script>
-  
+
 </body>
+
 </html>
