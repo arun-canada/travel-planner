@@ -32,7 +32,19 @@ const state = {
 
   userLevel: 1,
 
-  xp: 0
+  xp: 0,
+
+  profile: {
+    level: 1,
+    xp: 0,
+    achievements: [],
+    stats: {
+      totalTrips: 0,
+      totalDestinations: 0,
+      countriesVisited: 0,
+      totalExpenses: 0
+    }
+  }
 
 };
 
@@ -60,7 +72,142 @@ const ACHIEVEMENTS = {
 
 };
 
+// ========== GEMINI AI INTEGRATION ==========
 
+// Using gemini-2.5-flash-lite for efficiency
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent';
+
+function saveGeminiApiKey() {
+  const apiKeyInput = document.getElementById('geminiApiKey');
+  const statusEl = document.getElementById('apiKeyStatus');
+  const apiKey = apiKeyInput.value.trim();
+
+  if (!apiKey) {
+    statusEl.innerHTML = '<span style="color: var(--warning);">Please enter an API key</span>';
+    return;
+  }
+
+  localStorage.setItem('tripflow_gemini_api_key', apiKey);
+  statusEl.innerHTML = '<span style="color: var(--mint);">API key saved successfully!</span>';
+  apiKeyInput.value = '';
+  apiKeyInput.placeholder = '••••••••••••••••';
+}
+
+function getGeminiApiKey() {
+  return localStorage.getItem('tripflow_gemini_api_key');
+}
+
+function hasGeminiApiKey() {
+  return !!getGeminiApiKey();
+}
+
+async function generateAIItinerary(destination, startDate, endDate, preferences = {}) {
+  const apiKey = getGeminiApiKey();
+
+  if (!apiKey) {
+    throw new Error('No Gemini API key configured. Please add your API key in Profile settings.');
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+  const prompt = `You are a travel planning expert. Create a detailed ${days}-day itinerary for a trip to ${destination}.
+
+Trip Details:
+- Destination: ${destination}
+- Duration: ${days} days (${startDate} to ${endDate})
+- Travel Style: ${preferences.style || 'balanced'}
+- Pace: ${preferences.pace || 'moderate'}
+- Budget Level: ${preferences.budget ? '$' + preferences.budget : 'moderate'}
+- Travelers: ${preferences.travelers || 1} person(s)
+- Interests: ${preferences.interests?.join(', ') || 'general sightseeing'}
+${preferences.mustDos?.length ? `- Must-do activities: ${preferences.mustDos.join(', ')}` : ''}
+
+Please provide a realistic itinerary with REAL places, restaurants, and attractions that actually exist in ${destination}.
+
+IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no explanation):
+{
+  "destination": "${destination}",
+  "summary": "Brief 1-2 sentence trip summary",
+  "days": [
+    {
+      "day": 1,
+      "date": "${startDate}",
+      "theme": "Arrival & Exploration",
+      "activities": [
+        {
+          "time": "9:00 AM",
+          "title": "Activity name",
+          "description": "Brief description",
+          "location": "Specific place name",
+          "type": "sightseeing|food|transport|relaxation|adventure",
+          "duration": 120,
+          "cost_estimate": "$20-30"
+        }
+      ]
+    }
+  ],
+  "tips": ["Local tip 1", "Local tip 2"],
+  "estimated_daily_budget": "$100-150"
+}
+
+Generate activities from morning to evening for each day. Include real restaurant names, real attractions, and accurate locations.`;
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 8192,
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || 'Failed to generate itinerary');
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+      throw new Error('No response from Gemini API');
+    }
+
+    // Clean up the response - remove markdown code blocks if present
+    let cleanedText = text.trim();
+    if (cleanedText.startsWith('```json')) {
+      cleanedText = cleanedText.slice(7);
+    } else if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.slice(3);
+    }
+    if (cleanedText.endsWith('```')) {
+      cleanedText = cleanedText.slice(0, -3);
+    }
+    cleanedText = cleanedText.trim();
+
+    const itinerary = JSON.parse(cleanedText);
+    console.log('[generateAIItinerary] Successfully generated itinerary:', itinerary);
+    return itinerary;
+
+  } catch (error) {
+    console.error('[generateAIItinerary] Error:', error);
+    throw error;
+  }
+}
 
 // ========== CITY COORDINATES DATABASE ==========
 
@@ -3308,11 +3455,20 @@ function renderWizardStep(step) {
 
   // Set button text and onclick handler for final step
   if (step === 7) {
-    nextBtn.textContent = 'Create Trip';
-    nextBtn.onclick = () => savePlannedTrip();
+    nextBtn.textContent = 'Create Trip ✓';
+    nextBtn.style.display = 'inline-flex';
+    nextBtn.disabled = false;
+    nextBtn.onclick = function() {
+      console.log('[Create Trip Button] Clicked! Calling savePlannedTrip...');
+      savePlannedTrip();
+    };
   } else {
-    nextBtn.textContent = 'Next \u2192';
-    nextBtn.onclick = null; // Remove handler, let default behavior take over
+    nextBtn.textContent = 'Next →';
+    nextBtn.style.display = 'inline-flex';
+    nextBtn.disabled = false;
+    nextBtn.onclick = function() {
+      wizardNext();
+    };
   }
 
 
@@ -3812,164 +3968,165 @@ function renderWizardStep(step) {
 
 
     case 7:
-
-      const days = Math.ceil((new Date(state.tripPlannerState.endDate) - new Date(state.tripPlannerState.startDate)) / (1000 * 60 * 60 * 24));
-
-      const dailyBudget = Math.round(state.tripPlannerState.budget / days);
-
-
-
-      let itineraryHTML = '<h3 class="mb-lg">Your Complete Itinerary</h3>';
-
-
-
-      for (let i = 0; i < Math.min(days, 7); i++) {
-
-        const date = new Date(state.tripPlannerState.startDate);
-
-        date.setDate(date.getDate() + i);
-
-        const energy = i % 3 === 0 ? 'high' : (i % 3 === 1 ? 'medium' : 'low');
-
-        const energyLabel = energy === 'high' ? '? High Energy' : (energy === 'medium' ? '\ud83d\udccd Medium Energy' : '\ud83d\udccd Low Energy');
-
-
-
-        itineraryHTML += `
-
-          <div class="itinerary-day">
-
-            <div class="itinerary-day-header">
-
-              <div class="itinerary-day-date">Day ${i + 1} - ${formatDate(date.toISOString().split('T')[0])}</div>
-
-              <div class="health-indicator ${energy}">${energyLabel}</div>
-
+      // Show loading state and trigger AI itinerary generation
+      if (hasGeminiApiKey()) {
+        content.innerHTML = `
+          <div class="text-center" style="padding: 3rem;">
+            <div class="loading-spinner" style="font-size: 3rem; margin-bottom: 1rem;">🌍</div>
+            <h3 style="margin-bottom: 0.5rem;">Generating Your Personalized Itinerary...</h3>
+            <p style="color: #666;">Our AI is creating a custom travel plan for ${state.tripPlannerState.destination}</p>
+            <div class="loading-dots" style="margin-top: 1rem;">
+              <span style="animation: pulse 1s infinite;">.</span>
+              <span style="animation: pulse 1s infinite 0.2s;">.</span>
+              <span style="animation: pulse 1s infinite 0.4s;">.</span>
             </div>
-
-            <div class="itinerary-activities">
-
-              ${energy === 'low' ? `
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">9:00 AM</div>
-
-                  <div>Leisurely breakfast at hotel</div>
-
-                </div>
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">11:00 AM</div>
-
-                  <div>Relaxed museum visit</div>
-
-                </div>
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">2:00 PM</div>
-
-                  <div>Spa / Downtime</div>
-
-                </div>
-
-              ` : energy === 'medium' ? `
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">8:00 AM</div>
-
-                  <div>Breakfast & hotel checkout</div>
-
-                </div>
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">10:00 AM</div>
-
-                  <div>City walking tour</div>
-
-                </div>
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">1:00 PM</div>
-
-                  <div>Lunch at local restaurant</div>
-
-                </div>
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">3:00 PM</div>
-
-                  <div>Free time / Shopping</div>
-
-                </div>
-
-              ` : `
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">7:00 AM</div>
-
-                  <div>Early breakfast</div>
-
-                </div>
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">8:00 AM</div>
-
-                  <div>Full day excursion</div>
-
-                </div>
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">1:00 PM</div>
-
-                  <div>Lunch included in tour</div>
-
-                </div>
-
-                <div class="itinerary-activity">
-
-                  <div class="itinerary-activity-time">6:00 PM</div>
-
-                  <div>Dinner & evening activity</div>
-
-                </div>
-
-              `}
-
-            </div>
-
-            <div class="itinerary-day-budget">Daily Budget: ~${formatCurrency(dailyBudget, state.tripPlannerState.currency)}</div>
-
           </div>
-
+          <style>
+            @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+            .loading-spinner { animation: spin 2s linear infinite; }
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          </style>
         `;
-
+        // Trigger async AI generation
+        loadAIItinerary();
+      } else {
+        // No API key - show message to configure it
+        content.innerHTML = `
+          <div class="text-center" style="padding: 2rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🔑</div>
+            <h3 style="margin-bottom: 1rem;">AI Itinerary Generation</h3>
+            <p style="color: #666; margin-bottom: 1.5rem;">
+              To generate a personalized itinerary with real places and activities,
+              please add your Gemini API key in your Profile settings.
+            </p>
+            <button class="btn btn-primary" onclick="navigateTo('profile')">Go to Settings</button>
+            <p style="margin-top: 1.5rem; font-size: 0.9rem; color: #888;">
+              Or continue to create the trip with a basic template itinerary.
+            </p>
+          </div>
+        `;
       }
-
-
-
-      content.innerHTML = itineraryHTML;
-
       break;
 
   }
 
 }
 
+// Load AI-generated itinerary for step 7
+async function loadAIItinerary() {
+  const content = document.getElementById('wizardContent');
+  const ps = state.tripPlannerState;
 
+  try {
+    const aiItinerary = await generateAIItinerary(
+      ps.destination,
+      ps.startDate,
+      ps.endDate,
+      {
+        style: ps.style,
+        pace: ps.pace,
+        budget: ps.budget,
+        currency: ps.currency,
+        travelers: ps.travelers,
+        interests: ps.interests,
+        mustDos: ps.mustDos
+      }
+    );
 
+    // Store the AI itinerary in state for later use when saving
+    state.tripPlannerState.aiItinerary = aiItinerary;
 
+    // Render the AI-generated itinerary
+    let html = `
+      <div class="ai-itinerary">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <h3 style="margin: 0;">Your ${aiItinerary.destination} Itinerary</h3>
+          <span style="background: var(--mint); color: var(--surface); padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.8rem;">AI Generated</span>
+        </div>
+        ${aiItinerary.summary ? `<p style="color: #666; margin-bottom: 1.5rem;">${aiItinerary.summary}</p>` : ''}
+    `;
 
+    // Render each day
+    aiItinerary.days.forEach(day => {
+      html += `
+        <div class="itinerary-day" style="margin-bottom: 1.5rem; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden;">
+          <div class="itinerary-day-header" style="background: var(--surface); color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong>Day ${day.day}</strong> - ${formatDate(day.date)}
+            </div>
+            <div style="font-size: 0.85rem; opacity: 0.9;">${day.theme || ''}</div>
+          </div>
+          <div class="itinerary-activities" style="padding: 1rem;">
+      `;
 
+      day.activities.forEach(activity => {
+        const typeIcon = {
+          'sightseeing': '📍',
+          'food': '🍽️',
+          'transport': '🚗',
+          'relaxation': '🧘',
+          'adventure': '🎯',
+          'shopping': '🛍️',
+          'culture': '🎭'
+        }[activity.type] || '📌';
+
+        html += `
+          <div class="itinerary-activity" style="display: flex; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid #f0f0f0;">
+            <div class="itinerary-activity-time" style="min-width: 80px; font-weight: 600; color: var(--primary);">${activity.time}</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 500;">${typeIcon} ${activity.title}</div>
+              ${activity.description ? `<div style="font-size: 0.85rem; color: #666; margin-top: 0.25rem;">${activity.description}</div>` : ''}
+              ${activity.location ? `<div style="font-size: 0.8rem; color: #888; margin-top: 0.25rem;">📍 ${activity.location}</div>` : ''}
+            </div>
+            ${activity.cost_estimate ? `<div style="font-size: 0.8rem; color: var(--accent);">${activity.cost_estimate}</div>` : ''}
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    });
+
+    // Add tips if available
+    if (aiItinerary.tips && aiItinerary.tips.length > 0) {
+      html += `
+        <div style="background: #f8f8f8; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+          <h4 style="margin: 0 0 0.5rem 0;">💡 Local Tips</h4>
+          <ul style="margin: 0; padding-left: 1.5rem;">
+            ${aiItinerary.tips.map(tip => `<li style="margin-bottom: 0.25rem;">${tip}</li>`).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
+    if (aiItinerary.estimated_daily_budget) {
+      html += `
+        <div style="text-align: center; margin-top: 1rem; padding: 1rem; background: var(--surface); color: white; border-radius: 8px;">
+          Estimated Daily Budget: <strong>${aiItinerary.estimated_daily_budget}</strong>
+        </div>
+      `;
+    }
+
+    html += '</div>';
+    content.innerHTML = html;
+
+  } catch (error) {
+    console.error('[loadAIItinerary] Error:', error);
+    content.innerHTML = `
+      <div class="text-center" style="padding: 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+        <h3 style="margin-bottom: 1rem;">Could not generate itinerary</h3>
+        <p style="color: #666; margin-bottom: 1rem;">${error.message}</p>
+        <button class="btn btn-secondary" onclick="loadAIItinerary()">Try Again</button>
+        <p style="margin-top: 1rem; font-size: 0.85rem; color: #888;">
+          You can still create the trip - we'll use a basic template instead.
+        </p>
+      </div>
+    `;
+  }
+}
 
 function wizardNext() {
 
@@ -4244,115 +4401,121 @@ function connectHealthData() {
 
 
 function savePlannedTrip() {
+  console.log('[savePlannedTrip] FUNCTION CALLED');
+  try {
+    console.log('[savePlannedTrip] Starting trip creation...');
+    const ps = state.tripPlannerState;
+    console.log('[savePlannedTrip] Planner state:', JSON.stringify(ps, null, 2));
 
-  const ps = state.tripPlannerState;
+    // Validate required fields
+    if (!ps.destination || !ps.startDate || !ps.endDate) {
+      showToast('Missing required trip details. Please go back and fill in all fields.', 'error');
+      return;
+    }
 
+    // Use AI-generated itinerary if available, otherwise generate basic one
+    let itinerary;
+    if (ps.aiItinerary && ps.aiItinerary.days) {
+      console.log('[savePlannedTrip] Using AI-generated itinerary');
+      // Convert AI itinerary format to internal format
+      itinerary = ps.aiItinerary.days.map((day, index) => {
+        const activities = day.activities.map(act => ({
+          title: act.title,
+          description: act.description || '',
+          location: act.location || '',
+          time: act.time,
+          type: act.type || 'sightseeing',
+          duration: act.duration || 60,
+          cost_estimate: act.cost_estimate || '',
+          cals: 100,
+          steps: 2000
+        }));
 
+        const dailySteps = activities.length * 2000;
+        const dailyCals = activities.length * 100;
 
-
-
-  // Generate Itinerary
-
-  const itinerary = generateItinerary(ps.startDate, ps.endDate, ps);
-
-
-
-  // Calculate Health Score & Mode
-
-  const healthData = calculateHealthScore(itinerary, ps);
-
-
-
-  const trip = {
-
-    id: generateId(),
-
-    name: ps.destination.includes('Trip to') ? ps.destination : `Trip to ${ps.destination}`,
-
-    description: `${ps.style} trip with ${ps.pace} pace`,
-
-    startDate: ps.startDate,
-
-    endDate: ps.endDate,
-
-    destinations: [{ name: ps.destination, notes: `Budget: ${formatCurrency(ps.budget, ps.currency)}` }],
-
-    budget: { total: ps.budget, currency: ps.currency, expenses: [] },
-
-    itinerary: itinerary,
-
-    healthScore: healthData,
-
-    currentMode: 'Balanced', // Default mode
-
-    bodyStats: { // New Body Monitor Data
-
-      mood: 'Good',
-
-      sleep: 7,
-
-      restingHR: 62,
-
-      steps: 0
-
-    },
-
-    packingList: [],
-
-    documents: []
-
-  };
-
-
-
-  // Merge temp destinations if any
-
-  if (state.tempDestinations && state.tempDestinations.length > 0) {
-
-    state.tempDestinations.forEach(d => {
-
-      if (!trip.destinations.find(existing => existing.name === d)) {
-
-        trip.destinations.push({ name: d, notes: 'Added from Explore' });
-
+        return {
+          day: day.day,
+          date: day.date,
+          weekday: new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }),
+          focus: day.theme || 'Exploration',
+          activities: activities,
+          healthStats: {
+            steps: dailySteps,
+            calories: dailyCals
+          }
+        };
+      });
+      // Store tips and summary
+      if (ps.aiItinerary.tips) {
+        state.tripPlannerState.tips = ps.aiItinerary.tips;
       }
+    } else {
+      console.log('[savePlannedTrip] Using basic generated itinerary');
+      itinerary = generateItinerary(ps.startDate, ps.endDate, ps);
+    }
+    console.log('[savePlannedTrip] Itinerary has', itinerary.length, 'days');
 
-    });
+    // Calculate Health Score & Mode
+    const healthData = calculateHealthScore(itinerary, ps);
 
-    // Clear temp
+    // Build trip name safely
+    const tripName = (ps.destination && ps.destination.includes('Trip to'))
+      ? ps.destination
+      : `Trip to ${ps.destination || 'Unknown'}`;
 
-    state.tempDestinations = [];
+    // Build description safely
+    const tripDescription = `${ps.style || 'Custom'} trip with ${ps.pace || 'flexible'} pace`;
 
-    state.planningMode = false;
+    const trip = {
+      id: generateId(),
+      name: tripName,
+      description: tripDescription,
+      startDate: ps.startDate,
+      endDate: ps.endDate,
+      destinations: [{ name: ps.destination, notes: `Budget: ${formatCurrency(ps.budget || 0, ps.currency || 'USD')}` }],
+      budget: { total: ps.budget || 0, currency: ps.currency || 'USD', expenses: [] },
+      itinerary: itinerary,
+      healthScore: healthData,
+      currentMode: 'Balanced',
+      bodyStats: {
+        mood: 'Good',
+        sleep: 7,
+        restingHR: 62,
+        steps: 0
+      },
+      packingList: [],
+      documents: []
+    };
 
+    // Merge temp destinations if any
+    if (state.tempDestinations && state.tempDestinations.length > 0) {
+      state.tempDestinations.forEach(d => {
+        if (!trip.destinations.find(existing => existing.name === d)) {
+          trip.destinations.push({ name: d, notes: 'Added from Explore' });
+        }
+      });
+      state.tempDestinations = [];
+      state.planningMode = false;
+    }
+
+    state.trips.push(trip);
+    state.profile.stats.totalTrips++;
+    state.profile.stats.totalDestinations += trip.destinations.length;
+    saveData();
+
+    awardXP(100, 'Created trip with planner');
+
+    // CLOSE THE WIZARD UI
+    closeInlinePlanner();
+
+    showToast('Trip created successfully!', 'success');
+    console.log('[savePlannedTrip] Trip created, navigating to itinerary');
+    navigateTo('itinerary', trip.id);
+  } catch (error) {
+    console.error('[savePlannedTrip] Error creating trip:', error);
+    showToast('Error creating trip: ' + error.message, 'error');
   }
-
-
-
-  state.trips.push(trip);
-
-  state.profile.stats.totalTrips++;
-
-  state.profile.stats.totalDestinations += trip.destinations.length;
-
-  saveData();
-
-
-
-  awardXP(100, 'Created trip with planner');
-
-
-
-  // CLOSE THE WIZARD UI
-
-  closeInlinePlanner();
-
-
-
-  showToast('Trip created successfully!', 'success');
-
-  navigateTo('itinerary', trip.id);
-
 }
 
 
@@ -6041,6 +6204,17 @@ function renderProfile() {
 
   document.getElementById('achievementsGrid').innerHTML = achievementsHTML;
 
+  // Update API key status
+  const apiKeyStatus = document.getElementById('apiKeyStatus');
+  const apiKeyInput = document.getElementById('geminiApiKey');
+  if (apiKeyStatus && apiKeyInput) {
+    if (hasGeminiApiKey()) {
+      apiKeyStatus.innerHTML = '<span style="color: var(--mint);">API key is configured</span>';
+      apiKeyInput.placeholder = '••••••••••••••••';
+    } else {
+      apiKeyStatus.innerHTML = '<span style="color: #666;">No API key configured yet</span>';
+    }
+  }
 }
 
 

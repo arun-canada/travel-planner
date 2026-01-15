@@ -187,6 +187,24 @@
           <!-- Achievements -->
           <h3 class="mb-md">Achievements</h3>
           <div id="achievementsGrid" class="achievement-grid"></div>
+
+          <!-- Settings Section -->
+          <h3 class="mb-md mt-xl">Settings</h3>
+          <div class="card mb-lg">
+            <h4 style="margin-bottom: 1rem;">AI Itinerary Generation</h4>
+            <p style="margin-bottom: 1rem; color: #666; font-size: 0.9rem;">
+              Enter your Google Gemini API key to generate real, location-specific itineraries.
+              <a href="https://makersuite.google.com/app/apikey" target="_blank" style="color: var(--primary);">Get a free API key</a>
+            </p>
+            <div class="field-group">
+              <label class="form-label">Gemini API Key</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <input type="password" id="geminiApiKey" class="form-input" placeholder="Enter your Gemini API key" style="flex: 1;">
+                <button class="btn btn-primary" onclick="saveGeminiApiKey()">Save</button>
+              </div>
+              <div id="apiKeyStatus" style="margin-top: 0.5rem; font-size: 0.85rem;"></div>
+            </div>
+          </div>
         </div>
       </section>
     </div>
