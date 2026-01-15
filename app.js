@@ -171,6 +171,7 @@ Generate activities from morning to evening for each day. Include real restauran
           topK: 40,
           topP: 0.95,
           maxOutputTokens: 8192,
+          responseMimeType: "application/json"
         }
       })
     });
@@ -187,6 +188,8 @@ Generate activities from morning to evening for each day. Include real restauran
       throw new Error('No response from Gemini API');
     }
 
+    console.log('[generateAIItinerary] Raw response length:', text.length);
+
     // Clean up the response - remove markdown code blocks if present
     let cleanedText = text.trim();
     if (cleanedText.startsWith('```json')) {
@@ -199,7 +202,35 @@ Generate activities from morning to evening for each day. Include real restauran
     }
     cleanedText = cleanedText.trim();
 
-    const itinerary = JSON.parse(cleanedText);
+    // Try to parse JSON, with error recovery
+    let itinerary;
+    try {
+      itinerary = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error('[generateAIItinerary] JSON parse error, attempting repair...');
+      // Try to fix common JSON issues - truncated responses
+      // Find the last complete object/array
+      let fixedText = cleanedText;
+
+      // If it looks truncated, try to close it properly
+      const openBraces = (fixedText.match(/{/g) || []).length;
+      const closeBraces = (fixedText.match(/}/g) || []).length;
+      const openBrackets = (fixedText.match(/\[/g) || []).length;
+      const closeBrackets = (fixedText.match(/]/g) || []).length;
+
+      // Add missing closing brackets/braces
+      for (let i = 0; i < openBrackets - closeBrackets; i++) fixedText += ']';
+      for (let i = 0; i < openBraces - closeBraces; i++) fixedText += '}';
+
+      try {
+        itinerary = JSON.parse(fixedText);
+      } catch (e) {
+        // Last resort - log and throw
+        console.error('[generateAIItinerary] Could not repair JSON:', cleanedText.substring(0, 500));
+        throw new Error('Invalid response format from AI. Please try again.');
+      }
+    }
+
     console.log('[generateAIItinerary] Successfully generated itinerary:', itinerary);
     return itinerary;
 
