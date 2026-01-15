@@ -3306,7 +3306,14 @@ function renderWizardStep(step) {
 
   prevBtn.style.display = step === 1 ? 'none' : 'inline-flex';
 
-  nextBtn.textContent = step === 7 ? 'Create Trip' : 'Next ?';
+  // Set button text and onclick handler for final step
+  if (step === 7) {
+    nextBtn.textContent = 'Create Trip';
+    nextBtn.onclick = () => savePlannedTrip();
+  } else {
+    nextBtn.textContent = 'Next \u2192';
+    nextBtn.onclick = null; // Remove handler, let default behavior take over
+  }
 
 
 
