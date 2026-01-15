@@ -74,8 +74,8 @@ const ACHIEVEMENTS = {
 
 // ========== GEMINI AI INTEGRATION ==========
 
-// Using gemini-1.5-flash - stable and widely available
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+// Using gemini-2.5-flash
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 function saveGeminiApiKey() {
   const apiKeyInput = document.getElementById('geminiApiKey');
