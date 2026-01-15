@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -38,10 +38,10 @@
       <div class="logo">TripFlow</div>
 
       <nav class="nav">
-        <a href="#home" class="nav-link" data-page="home">🏠 Home</a>
-        <a href="#explore" class="nav-link" data-page="explore">🔍 Explore</a>
-        <a href="#chat" class="nav-link" data-page="chat">🤖 AI Assistant</a>
-        <a href="#profile" class="nav-link" data-page="profile">👤 Profile</a>
+        <a href="#home" class="nav-link" data-page="home"><span>&#x1F3E0;</span> Home</a>
+        <a href="#explore" class="nav-link" data-page="explore"><span>&#x1F50D;</span> Explore</a>
+        <a href="#chat" class="nav-link" data-page="chat"><span>&#x1F916;</span> AI Assistant</a>
+        <a href="#profile" class="nav-link" data-page="profile"><span>&#x1F464;</span> Profile</a>
       </nav>
 
       <div class="xp-bar-container" id="xpBarContainer">
@@ -63,7 +63,7 @@
         <div class="hero-content">
           <h1 class="hero-title">Plan Your Next Adventure</h1>
           <p class="hero-subtitle">Turn travel dreams into reality with gamification and smart planning tools</p>
-          <button class="btn btn-primary btn-lg" id="createTripBtn">✨ Create New Trip</button>
+          <button class="btn btn-primary btn-lg" id="createTripBtn"><span>&#x2728;</span> Create New Trip</button>
         </div>
       </section>
 
@@ -88,12 +88,12 @@
 
           <!-- Tabs -->
           <div class="tabs" id="tripTabs">
-            <button class="tab active" data-tab="overview">📋 Overview</button>
-            <button class="tab" data-tab="itinerary">📅 Itinerary</button>
-            <button class="tab" data-tab="budget">💰 Budget</button>
-            <button class="tab" data-tab="map">🗺️ Map</button>
-            <button class="tab" data-tab="packing">🎒 Packing</button>
-            <button class="tab" data-tab="documents">📄 Documents</button>
+            <button class="tab active" data-tab="overview"><span>&#x1F4CB;</span> Overview</button>
+            <button class="tab" data-tab="itinerary"><span>&#x1F4C5;</span> Itinerary</button>
+            <button class="tab" data-tab="budget"><span>&#x1F4B0;</span> Budget</button>
+            <button class="tab" data-tab="map"><span>&#x1F5FA;</span> Map</button>
+            <button class="tab" data-tab="packing"><span>&#x1F392;</span> Packing</button>
+            <button class="tab" data-tab="documents"><span>&#x1F4C4;</span> Documents</button>
           </div>
 
           <!-- Tab Contents -->
@@ -122,7 +122,7 @@
 
           <!-- Filter Panel -->
           <div class="filter-panel mb-lg" id="filterPanel">
-            <button class="btn btn-sm btn-outline" id="toggleFilters">🔧 Filters</button>
+            <button class="btn btn-sm btn-outline" id="toggleFilters">&#x1F527; Filters</button>
             <div class="filter-content" id="filterContent">
               <div class="filter-group">
                 <label class="form-label">Budget Level</label>
@@ -146,12 +146,12 @@
               <div class="filter-group">
                 <label class="form-label">Vibe</label>
                 <div id="vibeFilters" class="vibe-tags">
-                  <button class="vibe-tag" data-vibe="beach">🏖️ Beach</button>
-                  <button class="vibe-tag" data-vibe="cultural">🏛️ Cultural</button>
-                  <button class="vibe-tag" data-vibe="adventure">🏔️ Adventure</button>
-                  <button class="vibe-tag" data-vibe="nightlife">🎉 Nightlife</button>
-                  <button class="vibe-tag" data-vibe="relaxing">🧘 Relaxing</button>
-                  <button class="vibe-tag" data-vibe="luxury">💎 Luxury</button>
+                  <button class="vibe-tag" data-vibe="beach">&#x1F3D6; Beach</button>
+                  <button class="vibe-tag" data-vibe="cultural">&#x1F3DB; Cultural</button>
+                  <button class="vibe-tag" data-vibe="adventure">&#x1F3D4; Adventure</button>
+                  <button class="vibe-tag" data-vibe="nightlife">&#x1F389; Nightlife</button>
+                  <button class="vibe-tag" data-vibe="relaxing">&#x1F9D8; Relaxing</button>
+                  <button class="vibe-tag" data-vibe="luxury">&#x1F48E; Luxury</button>
                 </div>
               </div>
               <button class="btn btn-sm btn-primary" id="applyFilters">Apply Filters</button>
@@ -195,7 +195,7 @@
     <div id="chatPage" class="page-container hidden">
       <section class="section">
         <div class="container">
-          <h1 class="mb-lg">🤖 AI Travel Assistant</h1>
+          <h1 class="mb-lg">&#x1F916; AI Travel Assistant</h1>
           <div class="chat-container">
             <div id="chatMessages" class="chat-messages"></div>
             <div class="chat-input-container">
@@ -246,6 +246,10 @@
   <!-- App JS -->
   <script src="app.js"></script>
 
+  <!-- AI Assistant - Menu-Based System -->
+  <script src="ai-assistant-complete.js"></script>
+
 </body>
 
 </html>
+
