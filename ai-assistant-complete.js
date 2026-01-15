@@ -281,7 +281,7 @@ function showCategoryTasks(categoryKey) {
     // Back button
     const backBtn = document.createElement('button');
     backBtn.className = 'btn-secondary';
-    backBtn.innerHTML = '← Start Over';
+    backBtn.innerHTML = '\u2190 Start Over';
     backBtn.onclick = () => renderCategoryMenu();
     backBtn.style.marginBottom = '1rem';
     chatPanel.appendChild(backBtn);
@@ -353,7 +353,7 @@ function askFollowup(taskId, questions, index, answers) {
     // Back button
     const backBtn = document.createElement('button');
     backBtn.className = 'btn-secondary';
-    backBtn.innerHTML = '← Back';
+    backBtn.innerHTML = '\u2190 Back';
     backBtn.onclick = () => index === 0 ? renderCategoryMenu() : askFollowup(taskId, questions, index - 1, answers);
     backBtn.style.marginBottom = '1rem';
     chatPanel.appendChild(backBtn);
@@ -435,7 +435,7 @@ function renderDestinationResults(taskId, answers) {
     // Back button
     const backBtn = document.createElement('button');
     backBtn.className = 'btn-secondary';
-    backBtn.innerHTML = '← Start Over';
+    backBtn.innerHTML = '\u2190 Start Over';
     backBtn.onclick = () => renderCategoryMenu();
     backBtn.style.cssText = 'margin-bottom: 1rem;';
     chatPanel.appendChild(backBtn);
@@ -466,25 +466,25 @@ function renderDestinationResults(taskId, answers) {
         const imgUrl = `https://images.unsplash.com/photo-1${513635269975 + i}?w=400&h=300&fit=crop&q=80`;
 
         card.innerHTML = `
-      <div style="position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,0.75); color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; z-index: 1;">
+      <div style="position: absolute; top: 12px; left: 12px; background: linear-gradient(135deg, var(--primary-alpine), var(--mint)); color: white; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; z-index: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
         #${i + 1}
       </div>
-      <img src="${imgUrl}" alt="${dest.name}" style="width: 100%; height: 200px; object-fit: cover; background: #f5f5f5;">
-      <div style="padding: 1.25rem;">
-        <h4 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; color: var(--text-primary);">${dest.name}, ${dest.country}</h4>
-        <p style="margin: 0 0 1rem 0; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5;">${dest.desc}</p>
+      <img src="${imgUrl}" alt="${dest.name}" style="width: 100%; height: 200px; object-fit: cover; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);" onerror="this.style.background='linear-gradient(135deg, #667eea 0%, #764ba2 100%)'; this.style.display='block';">
+      <div style="padding: 1.5rem;">
+        <h4 style="margin: 0 0 0.75rem 0; font-size: 1.3rem; color: var(--text-dark, #333); font-weight: 700;">${dest.name}, ${dest.country}</h4>
+        <p style="margin: 0 0 1.25rem 0; color: #666; font-size: 0.95rem; line-height: 1.6;">${dest.desc}</p>
         
-        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
-          <span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.75rem; background: #e8f5e9; color: #2e7d32; border-radius: 12px; font-size: 0.85rem; font-weight: 500;">
-            💰 ${dest.budget}
+        <div style="display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+          <span style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%); color: #1b5e20; border-radius: 20px; font-size: 0.9rem; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <span style="font-size: 1.1rem;">\ud83d\udcb0</span> ${dest.budget}
           </span>
-          <span style="padding: 0.25rem 0.75rem; background: #e3f2fd; color: #1976d2; border-radius: 12px; font-size: 0.85rem;">
-            ${dest.vibe}
+          <span style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #0d47a1; border-radius: 20px; font-size: 0.9rem; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <span style="font-size: 1.1rem;">\ud83c\udfaf</span> ${dest.vibe}
           </span>
         </div>
         
-        <button class="btn-primary" onclick="quickAddToTrip('${dest.name}, ${dest.country}')" style="width: 100%; padding: 0.75rem; font-size: 0.95rem;">
-          ➕ Add to Trip
+        <button class="btn btn-primary" onclick="quickAddToTrip('${dest.name}, ${dest.country}')" style="width: 100%; padding: 0.875rem; font-size: 1rem; font-weight: 600; background: var(--gradient-summit); border: none; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(31, 122, 90, 0.3);">
+          <span style="font-size: 1.1rem; margin-right: 0.5rem;">\u2795</span> Add to Trip
         </button>
       </div>
     `;
